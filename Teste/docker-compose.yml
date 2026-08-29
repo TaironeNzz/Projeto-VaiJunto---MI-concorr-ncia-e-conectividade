@@ -3,7 +3,6 @@ version: '3.8'
 services:
   servidor:
     build: .
-    container_name: socket_servidor
     command: ./servidor
     ports:
       - "65432:65432"
