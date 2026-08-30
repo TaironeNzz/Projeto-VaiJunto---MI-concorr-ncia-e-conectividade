@@ -26,10 +26,10 @@ void salvarCadastro(char *cadastro){
 void *tratarCliente(void *arg){
     int socketCliente = *(int*)arg;
     free(arg);
-    char buffer_mensagem [81] = {0};
+    char buffer_mensagem [150] = {0};
     char *mensagem = "Recebi a mensagem cliente";
 
-    ssize_t bytes_lidos = read(socketCliente, buffer_mensagem, 80);
+    ssize_t bytes_lidos = read(socketCliente, buffer_mensagem, 149);
     buffer_mensagem[bytes_lidos] ='\0';
     if (bytes_lidos > 0) {
         buffer_mensagem[bytes_lidos] = '\0';

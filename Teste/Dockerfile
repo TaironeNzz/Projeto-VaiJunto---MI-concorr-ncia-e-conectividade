@@ -12,6 +12,6 @@ COPY . /app
 
 # 2. Compila os dois binários vinculando pthreads e cJSON
 RUN gcc -D_XOPEN_SOURCE=600 servidor.c -o servidor -lpthread -lcjson
-RUN gcc cliente.c -o cliente -lcjson
+RUN gcc cliente.c cJSON.c -o cliente
 
 CMD ["./servidor"]
