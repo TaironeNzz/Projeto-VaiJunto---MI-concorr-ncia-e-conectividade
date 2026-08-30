@@ -6,7 +6,9 @@ services:
     command: ./servidor
     ports:
       - "65432:65432"
-
+    volumes:
+      - ./dados:/app/dados
+      
   cliente:
     build: .
     command: ./cliente

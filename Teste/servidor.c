@@ -12,10 +12,21 @@
 
 #define PORT 65432
 
+void salvarCadastro(char *cadastro){
+    FILE *arquivo = fopen("dados/cadastro.json", "a");
+    if (arquivo == NULL) {
+        perror("Erro ao abrir o arquivo");
+        return;
+    }
+    fprintf(arquivo, "%s\n", cadastro);
+    fflush(arquivo);
+    fclose(arquivo);
+}
+
 void *tratarCliente(void *arg){
     int socketCliente = *(int*)arg;
     free(arg);
-    char buffer_mensagem [80] = {0};
+    char buffer_mensagem [81] = {0};
     char *mensagem = "Recebi a mensagem cliente";
 
     ssize_t bytes_lidos = read(socketCliente, buffer_mensagem, 80);
@@ -24,6 +35,7 @@ void *tratarCliente(void *arg){
         buffer_mensagem[bytes_lidos] = '\0';
         printf("Mensagem do cliente: %s\n", buffer_mensagem);
         fflush(stdout);
+        salvarCadastro(buffer_mensagem);
     }
     send(socketCliente, mensagem, strlen(mensagem), 0);
     close(socketCliente);
