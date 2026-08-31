@@ -5,7 +5,7 @@ typedef enum{
     DESCONECTADO,
     AUTENTICADO,
     EM_VIAGEM
-} Status_Cliente;
+} Status;
 
 typedef struct lista_trechos {
     int ID_trecho_atual;
@@ -17,7 +17,7 @@ typedef struct {
     char nome[50];
     char email[50];
     char senha[20];
-    Status_Cliente status;
+    Status status;
 } Cliente;
 
 typedef struct {
@@ -27,7 +27,7 @@ typedef struct {
     char senha[20];
     int reservas;
     lista_trechos *trechos;
-    Status_Cliente status;
+    Status status;
 } Motorista;
 
 #endif
