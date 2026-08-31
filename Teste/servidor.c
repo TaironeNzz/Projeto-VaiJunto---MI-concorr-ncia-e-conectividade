@@ -112,35 +112,49 @@ void *rotinaTratamento(void *arg){
     free(arg);
     char buffer_mensagem [150] = {0};
     cJSON *json = NULL;
-    while (strcmp(buffer_mensagem, "DESCONECTADO") != 0){
+    while (1){
         ssize_t bytes_lidos = read(socket, buffer_mensagem, 149);
-        buffer_mensagem[bytes_lidos] ='\0';
-        if (bytes_lidos > 0) {
-            buffer_mensagem[bytes_lidos] = '\0';
-            json = cJSON_Parse(buffer_mensagem);
-            if (json == NULL) {
-                printf("Erro ao analisar JSON: %s\n", cJSON_GetErrorPtr());
+
+        if (bytes_lidos <= 0) {
+            break;
+        }
+        buffer_mensagem[bytes_lidos] = '\0';
+
+        if (strcmp(buffer_mensagem, "DESCONECTADO") == 0) {
+            break;
+        }
+            
+        json = cJSON_Parse(buffer_mensagem);
+        if (json == NULL) {
+            printf("Erro ao analisar JSON: %s\n", cJSON_GetErrorPtr());
+            close(socket);
+            cJSON_Delete(json);
+            return NULL;
+        }
+        if (cJSON_GetStringValue(cJSON_GetObjectItem(json, "classe")) != NULL) {
+            const char *classe = cJSON_GetStringValue(cJSON_GetObjectItem(json, "classe"));
+            if (strcmp(classe, "Cliente") == 0) {
+                tratarCliente(socket, json, cJSON_GetStringValue(cJSON_GetObjectItem(json, "acao")));
+            } else if (strcmp(classe, "Motorista") == 0) {
+                tratarMotorista(socket, cJSON_GetStringValue(cJSON_GetObjectItem(json, "acao")));
+            } else {
+                printf("Classe desconhecida: %s\n", classe);
                 close(socket);
+                cJSON_Delete(json);
                 return NULL;
             }
-            if (cJSON_GetStringValue(cJSON_GetObjectItem(json, "classe")) != NULL) {
-                const char *classe = cJSON_GetStringValue(cJSON_GetObjectItem(json, "classe"));
-                if (strcmp(classe, "Cliente") == 0) {
-                    tratarCliente(socket, json, cJSON_GetStringValue(cJSON_GetObjectItem(json, "acao")));
-                } else if (strcmp(classe, "Motorista") == 0) {
-                    tratarMotorista(socket, cJSON_GetStringValue(cJSON_GetObjectItem(json, "acao")));
-                } else {
-                    printf("Classe desconhecida: %s\n", classe);
-                    close(socket);
-                }
-            } else {
-                printf("Campo 'classe' não encontrado no JSON.\n");
-                close(socket);
-            }
+        } else {
+            printf("Campo 'classe' não encontrado no JSON.\n");
+            close(socket);
             cJSON_Delete(json);
-            fflush(stdout);
+            return NULL;
         }
-    }
+        cJSON_Delete(json);
+        fflush(stdout);
+        }
+    
+    printf("Dispositivo desconectado! Socket ID: %d\n", socket);
+    fflush(stdout);
     close(socket);
     return NULL;
 }
@@ -186,6 +200,11 @@ int main(){
     }
 
     tamanho_endereco = sizeof(endereco_conexao);
+    
+    printf("==================================================\n");
+    printf("        DISPOSITIVOS CONECTADOS NA PORTA %d\n", PORT);
+    printf("==================================================\n");
+
     int i = 0;
     while (i<limite_clientes){
         socketCliente = accept(socketServidor, (struct sockaddr*)&endereco_conexao, &tamanho_endereco);
@@ -194,7 +213,7 @@ int main(){
             continue;
         }
             
-        printf("Novo cliente conectado! Socket ID: %d\n", socketCliente);
+        printf("Novo Dispositivo conectado! Socket ID: %d\n", socketCliente);
 
         int *novo_sock = malloc(sizeof(int));
         *novo_sock = socketCliente;

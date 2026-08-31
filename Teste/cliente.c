@@ -41,6 +41,8 @@ void telaLogin(int socketCliente, Cliente *cliente){
     char buffer_mensagem[18] = {0};
     int escolha = 0;
     int sair = 0;
+    int enviou = 0;
+
     while(sair != 1){
         printf("====================================\n");
         printf("                Login               \n");
@@ -61,6 +63,7 @@ void telaLogin(int socketCliente, Cliente *cliente){
             scanf(" %49[^\n]", cliente->senha);
         } else if (escolha == 3) {
             enviarCadastro(socketCliente, cliente->nome, cliente->email, cliente->senha, 1);
+            enviou = 1;
             break;
         } else if (escolha == 4) {
             sair = 1;
@@ -68,6 +71,11 @@ void telaLogin(int socketCliente, Cliente *cliente){
             printf("Opcao invalida. Tente novamente.\n");
         }
     }
+
+    if (!enviou) {
+        return;
+    }
+
     int bytes = read(socketCliente, buffer_mensagem, 17);
     if (bytes > 0) {
         buffer_mensagem[bytes] = '\0';
@@ -87,6 +95,7 @@ void telaCadastro(int socketCliente, Cliente *cliente){
     int escolha = 0;
     char buffer_mensagem[20] = {0};
     int sair = 0;
+    int enviou = 0;
     while(sair != 1){
         printf("====================================\n");
         printf("              Cadastro              \n");
@@ -111,6 +120,7 @@ void telaCadastro(int socketCliente, Cliente *cliente){
             scanf(" %49[^\n]", cliente->senha);
         } else if (escolha == 4) {
             enviarCadastro(socketCliente, cliente->nome, cliente->email, cliente->senha, 2);
+            enviou = 1;
             break;
         } else if (escolha == 5) {
             sair = 1;
@@ -119,7 +129,11 @@ void telaCadastro(int socketCliente, Cliente *cliente){
         }
     }
 
-    ssize_t bytes = read(socketCliente, buffer_mensagem, 19);
+    if (!enviou) {
+        return;
+    }
+
+    ssize_t bytes = read(socketCliente, buffer_mensagem, 20);
     if (bytes > 0) {
         buffer_mensagem[bytes] = '\0';
         if (strcmp(buffer_mensagem, "EMAIL_JA_CADASTRADO") == 0) {
