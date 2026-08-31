@@ -16,9 +16,11 @@
 void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int escolha){
     cJSON *enviar_dados = cJSON_CreateObject();
     
+    cJSON_AddStringToObject(enviar_dados, "classe", "Cliente");
     cJSON_AddStringToObject(enviar_dados, "nome", nome ? nome : "");
     cJSON_AddStringToObject(enviar_dados, "email", email ? email : "");
     cJSON_AddStringToObject(enviar_dados, "senha", senha ? senha : "");
+    cJSON_AddStringToObject(enviar_dados, "status", "");
     
     if (escolha == 1) {
         cJSON_AddStringToObject(enviar_dados, "acao", "login");
@@ -36,14 +38,17 @@ void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int
 }
 
 void telaLogin(int socketCliente, Cliente *cliente){
+    char buffer_mensagem[18] = {0};
     int escolha = 0;
-    while(escolha != 3){
+    int sair = 0;
+    while(sair != 1){
         printf("====================================\n");
         printf("                Login               \n");
         printf("====================================\n");
         printf(" 1- Email: %s\n", cliente->email);
         printf(" 2- Senha: %s\n", cliente->senha);
         printf(" 3- Enviar Login                    \n");
+        printf(" 4- Voltar                          \n");
         printf("====================================\n");
         printf("Escolha uma opcao: ");
         scanf("%d", &escolha);
@@ -57,16 +62,32 @@ void telaLogin(int socketCliente, Cliente *cliente){
         } else if (escolha == 3) {
             enviarCadastro(socketCliente, cliente->nome, cliente->email, cliente->senha, 1);
             break;
+        } else if (escolha == 4) {
+            sair = 1;
         } else {
             printf("Opcao invalida. Tente novamente.\n");
         }
-        fflush(stdout);
+    }
+    int bytes = read(socketCliente, buffer_mensagem, 17);
+    if (bytes > 0) {
+        buffer_mensagem[bytes] = '\0';
+        if (strcmp(buffer_mensagem, "NAO_AUTENTICADO") == 0) {
+            printf("Email ou senha incorretos. Tente novamente.\n");
+            telaLogin(socketCliente, cliente);
+        } else if (strcmp(buffer_mensagem, "AUTENTICADO") == 0) {
+            printf("Login realizado com sucesso!\n");
+            cliente->status = AUTENTICADO;
+        } else {
+            printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
+        }
     }
 }
 
 void telaCadastro(int socketCliente, Cliente *cliente){
     int escolha = 0;
-    while(escolha != 4){
+    char buffer_mensagem[20] = {0};
+    int sair = 0;
+    while(sair != 1){
         printf("====================================\n");
         printf("              Cadastro              \n");
         printf("====================================\n");
@@ -74,6 +95,7 @@ void telaCadastro(int socketCliente, Cliente *cliente){
         printf(" 2- Email: %s\n", cliente->email);
         printf(" 3- Senha: %s\n", cliente->senha);
         printf(" 4- Enviar Cadastro                 \n");
+        printf(" 5- Voltar                          \n");
         printf("====================================\n");
         printf("Escolha uma opcao: ");
         scanf("%d", &escolha);
@@ -90,34 +112,59 @@ void telaCadastro(int socketCliente, Cliente *cliente){
         } else if (escolha == 4) {
             enviarCadastro(socketCliente, cliente->nome, cliente->email, cliente->senha, 2);
             break;
+        } else if (escolha == 5) {
+            sair = 1;
         } else {
             printf("Opcao invalida. Tente novamente.\n");
+        }
+    }
+
+    ssize_t bytes = read(socketCliente, buffer_mensagem, 19);
+    if (bytes > 0) {
+        buffer_mensagem[bytes] = '\0';
+        if (strcmp(buffer_mensagem, "EMAIL_JA_CADASTRADO") == 0) {
+            printf("Email ja cadastrado. Tente novamente.\n");
+            telaCadastro(socketCliente, cliente);
+        } else if (strcmp(buffer_mensagem, "CADASTRO_REALIZADO") == 0) {
+            printf("Cadastro realizado com sucesso!\n");
+            cliente->status = AUTENTICADO;
+        } else {
+            printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
         }
     }
 }
 
 void telaInicial(int socketCliente, Cliente *cliente){
-    int opcao = 0;
-    printf("====================================\n");
-    printf("          Sistema de Login          \n");
-    printf("====================================\n");
-    printf("| 1- LOGIN                         |\n");
-    printf("| 2- CADASTRAR                     |\n");
-    printf("====================================\n");
-    printf("Escolha uma opcao: ");
-    scanf("%d", &opcao);
+    int sair = 0;
+    while (!sair) {
+        int opcao = 0;
+        printf("====================================\n");
+        printf("          Sistema de Login          \n");
+        printf("====================================\n");
+        printf("| 1- LOGIN                         |\n");
+        printf("| 2- CADASTRAR                     |\n");
+        printf("| 3- SAIR                          |\n");
+        printf("====================================\n");
+        printf("Escolha uma opcao: ");
+        scanf("%d", &opcao);
 
-    switch (opcao) {
-        case 1:
-            telaLogin(socketCliente, cliente);
-            break;
-        case 2:
-            telaCadastro(socketCliente, cliente);
-            break;
-        default:
-            printf("Opcao invalida. Tente novamente.\n");
-            telaInicial(socketCliente, cliente);
-            break;
+        switch (opcao) {
+            case 1:
+                telaLogin(socketCliente, cliente);
+                break;
+            case 2:
+                telaCadastro(socketCliente, cliente);
+                break;
+            case 3:
+                printf("Saindo...\n");
+                send(socketCliente, "DESCONECTADO", 13, 0);
+                cliente->status = DESCONECTADO;
+                sair = 1;
+                break;
+            default:
+                printf("Opcao invalida. Tente novamente.\n");
+                break;
+        }
     }
 }
 

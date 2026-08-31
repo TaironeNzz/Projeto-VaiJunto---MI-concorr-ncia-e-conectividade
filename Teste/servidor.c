@@ -12,33 +12,136 @@
 
 #define PORT 65432
 
-void salvarCadastro(char *cadastro){
-    FILE *arquivo = fopen("dados/cadastro.json", "a");
+void salvarLoginCliente(char *login){
+    FILE *arquivo = fopen("dados/loginCliente.json", "a");
     if (arquivo == NULL) {
         perror("Erro ao abrir o arquivo");
         return;
     }
-    fprintf(arquivo, "%s\n", cadastro);
+    fprintf(arquivo, "%s\n", login);
     fflush(arquivo);
     fclose(arquivo);
 }
 
-void *tratarCliente(void *arg){
-    int socketCliente = *(int*)arg;
-    free(arg);
-    char buffer_mensagem [150] = {0};
-    char *mensagem = "Recebi a mensagem cliente";
+void salvarLoginMotorista(char *login){
+    FILE *arquivo = fopen("dados/loginMotorista.json", "a");
+    if (arquivo == NULL) {
+        perror("Erro ao abrir o arquivo");
+        return;
+    }
+    fprintf(arquivo, "%s\n", login);
+    fflush(arquivo);
+    fclose(arquivo);
+}
 
-    ssize_t bytes_lidos = read(socketCliente, buffer_mensagem, 149);
+void tratarMotorista(int socketMotorista, char *acao){
+    char buffer_mensagem [150] = {0};
+    char *mensagem = "Recebi a mensagem motorista";
+
+    ssize_t bytes_lidos = read(socketMotorista, buffer_mensagem, 149);
     buffer_mensagem[bytes_lidos] ='\0';
     if (bytes_lidos > 0) {
         buffer_mensagem[bytes_lidos] = '\0';
-        printf("Mensagem do cliente: %s\n", buffer_mensagem);
+        printf("Mensagem do motorista: %s\n", buffer_mensagem);
         fflush(stdout);
-        salvarCadastro(buffer_mensagem);
+        salvarLoginMotorista(buffer_mensagem);
     }
-    send(socketCliente, mensagem, strlen(mensagem), 0);
-    close(socketCliente);
+    send(socketMotorista, mensagem, strlen(mensagem), 0);
+    return;
+}
+
+void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
+    char dadosLogin[256] = {0};
+    int emailEncontrado = 0;
+    FILE *arquivo = fopen("dados/loginCliente.json", "a+");
+    if (arquivo == NULL) {
+        perror("Erro ao abrir o arquivo");
+        close(socketCliente);
+        return;
+    }
+    rewind(arquivo);
+
+    char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
+    char *senhaBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "senha"));
+    
+    if (strcmp(acao, "login") == 0) {
+        while(fgets(dadosLogin, sizeof(dadosLogin), arquivo) != NULL) {
+            cJSON *dadosJson = cJSON_Parse(dadosLogin);
+            if(dadosJson != NULL) {
+                char *email = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "email"));
+                char *senha = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "senha"));
+                if (strcmp(email, emailBuscado) == 0 && strcmp(senha, senhaBuscada) == 0) {
+                    send(socketCliente, "AUTENTICADO", 12, 0);
+                    emailEncontrado = 1;
+                    break;
+                }
+            }
+            cJSON_Delete(dadosJson);
+        }
+        if (!emailEncontrado) {
+            send(socketCliente, "NAO_AUTENTICADO", 17, 0);
+        }
+    } else if (strcmp(acao, "cadastro") == 0) {
+        while(fgets(dadosLogin, sizeof(dadosLogin), arquivo) != NULL) {
+            cJSON *dadosJson = cJSON_Parse(dadosLogin);
+            if(dadosJson != NULL) {
+                char *email = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "email"));
+                if (strcmp(email, emailBuscado) == 0) {
+                    send(socketCliente, "EMAIL_JA_CADASTRADO", 20, 0);
+                    emailEncontrado = 1;
+                    break;
+                }
+            }
+            cJSON_Delete(dadosJson);
+        }
+        if (!emailEncontrado) {
+            char *saida = cJSON_PrintUnformatted(jsonLogin);
+            salvarLoginCliente(saida);
+            send(socketCliente, "CADASTRO_REALIZADO", 18, 0);
+            free(saida);
+        }
+    } else {
+        send(socketCliente, "ACAO_DESCONHECIDA", 18, 0);
+    }
+    fclose(arquivo);
+    return;
+}
+
+void *rotinaTratamento(void *arg){
+    int socket = *(int*)arg;
+    free(arg);
+    char buffer_mensagem [150] = {0};
+    cJSON *json = NULL;
+    while (strcmp(buffer_mensagem, "DESCONECTADO") != 0){
+        ssize_t bytes_lidos = read(socket, buffer_mensagem, 149);
+        buffer_mensagem[bytes_lidos] ='\0';
+        if (bytes_lidos > 0) {
+            buffer_mensagem[bytes_lidos] = '\0';
+            json = cJSON_Parse(buffer_mensagem);
+            if (json == NULL) {
+                printf("Erro ao analisar JSON: %s\n", cJSON_GetErrorPtr());
+                close(socket);
+                return NULL;
+            }
+            if (cJSON_GetStringValue(cJSON_GetObjectItem(json, "classe")) != NULL) {
+                const char *classe = cJSON_GetStringValue(cJSON_GetObjectItem(json, "classe"));
+                if (strcmp(classe, "Cliente") == 0) {
+                    tratarCliente(socket, json, cJSON_GetStringValue(cJSON_GetObjectItem(json, "acao")));
+                } else if (strcmp(classe, "Motorista") == 0) {
+                    tratarMotorista(socket, cJSON_GetStringValue(cJSON_GetObjectItem(json, "acao")));
+                } else {
+                    printf("Classe desconhecida: %s\n", classe);
+                    close(socket);
+                }
+            } else {
+                printf("Campo 'classe' não encontrado no JSON.\n");
+                close(socket);
+            }
+            cJSON_Delete(json);
+            fflush(stdout);
+        }
+    }
+    close(socket);
     return NULL;
 }
 
@@ -96,7 +199,7 @@ int main(){
         int *novo_sock = malloc(sizeof(int));
         *novo_sock = socketCliente;
         pthread_t threadID;
-        if ((pthread_create(&threadID, NULL, tratarCliente, novo_sock)) != 0){
+        if ((pthread_create(&threadID, NULL, rotinaTratamento, novo_sock)) != 0){
             perror("Erro ao criar thread para o cliente");
             free(novo_sock);
             close(socketCliente);
