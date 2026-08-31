@@ -16,7 +16,7 @@
 void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int escolha){
     cJSON *enviar_dados = cJSON_CreateObject();
     
-    cJSON_AddStringToObject(enviar_dados, "classe", "Cliente");
+    cJSON_AddStringToObject(enviar_dados, "classe", "Motorista");
     cJSON_AddStringToObject(enviar_dados, "nome", nome ? nome : "");
     cJSON_AddStringToObject(enviar_dados, "email", email ? email : "");
     cJSON_AddStringToObject(enviar_dados, "senha", senha ? senha : "");
@@ -37,7 +37,7 @@ void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int
     cJSON_Delete(enviar_dados);
 }
 
-void telaLogin(int socketCliente, Cliente *cliente){
+void telaLogin(int socketMotorista, Motorista *motorista){
     char buffer_mensagem[18] = {0};
     int escolha = 0;
     int sair = 0;
@@ -47,8 +47,8 @@ void telaLogin(int socketCliente, Cliente *cliente){
         printf("====================================\n");
         printf("                Login               \n");
         printf("====================================\n");
-        printf(" 1- Email: %s\n", cliente->email);
-        printf(" 2- Senha: %s\n", cliente->senha);
+        printf(" 1- Email: %s\n", motorista->email);
+        printf(" 2- Senha: %s\n", motorista->senha);
         printf(" 3- Enviar Login                    \n");
         printf(" 4- Voltar                          \n");
         printf("====================================\n");
@@ -57,12 +57,12 @@ void telaLogin(int socketCliente, Cliente *cliente){
 
         if (escolha == 1) {
             printf("Digite seu email: ");
-            scanf(" %49[^\n]", cliente->email);
+            scanf(" %49[^\n]", motorista->email);
         } else if (escolha == 2) {
             printf("Digite sua senha: ");
-            scanf(" %49[^\n]", cliente->senha);
+            scanf(" %49[^\n]", motorista->senha);
         } else if (escolha == 3) {
-            enviarCadastro(socketCliente, cliente->nome, cliente->email, cliente->senha, 1);
+            enviarCadastro(socketMotorista, motorista->nome, motorista->email, motorista->senha, 1);
             enviou = 1;
             break;
         } else if (escolha == 4) {
@@ -76,22 +76,22 @@ void telaLogin(int socketCliente, Cliente *cliente){
         return;
     }
 
-    int bytes = read(socketCliente, buffer_mensagem, 17);
+    int bytes = read(socketMotorista, buffer_mensagem, 17);
     if (bytes > 0) {
         buffer_mensagem[bytes] = '\0';
         if (strcmp(buffer_mensagem, "NAO_AUTENTICADO") == 0) {
             printf("Email ou senha incorretos. Tente novamente.\n");
-            telaLogin(socketCliente, cliente);
+            telaLogin(socketMotorista, motorista);
         } else if (strcmp(buffer_mensagem, "AUTENTICADO") == 0) {
             printf("Login realizado com sucesso!\n");
-            cliente->status = AUTENTICADO;
+            motorista->status = AUTENTICADO;
         } else {
             printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
         }
     }
 }
 
-void telaCadastro(int socketCliente, Cliente *cliente){
+void telaCadastro(int socketMotorista, Motorista *motorista){
     int escolha = 0;
     char buffer_mensagem[20] = {0};
     int sair = 0;
@@ -100,9 +100,9 @@ void telaCadastro(int socketCliente, Cliente *cliente){
         printf("====================================\n");
         printf("              Cadastro              \n");
         printf("====================================\n");
-        printf(" 1- Nome: %s\n", cliente->nome);
-        printf(" 2- Email: %s\n", cliente->email);
-        printf(" 3- Senha: %s\n", cliente->senha);
+        printf(" 1- Nome: %s\n", motorista->nome);
+        printf(" 2- Email: %s\n", motorista->email);
+        printf(" 3- Senha: %s\n", motorista->senha);
         printf(" 4- Enviar Cadastro                 \n");
         printf(" 5- Voltar                          \n");
         printf("====================================\n");
@@ -111,15 +111,15 @@ void telaCadastro(int socketCliente, Cliente *cliente){
 
         if (escolha == 1) {
             printf("Digite seu nome: ");
-            scanf(" %49[^\n]", cliente->nome);
+            scanf(" %49[^\n]", motorista->nome);
         } else if (escolha == 2) {
             printf("Digite seu email: ");
-            scanf(" %49[^\n]", cliente->email);
+            scanf(" %49[^\n]", motorista->email);
         } else if (escolha == 3) {
             printf("Digite sua senha: ");
-            scanf(" %49[^\n]", cliente->senha);
+            scanf(" %49[^\n]", motorista->senha);
         } else if (escolha == 4) {
-            enviarCadastro(socketCliente, cliente->nome, cliente->email, cliente->senha, 2);
+            enviarCadastro(socketMotorista, motorista->nome, motorista->email, motorista->senha, 2);
             enviou = 1;
             break;
         } else if (escolha == 5) {
@@ -133,27 +133,27 @@ void telaCadastro(int socketCliente, Cliente *cliente){
         return;
     }
 
-    ssize_t bytes = read(socketCliente, buffer_mensagem, 20);
+    ssize_t bytes = read(socketMotorista, buffer_mensagem, 20);
     if (bytes > 0) {
         buffer_mensagem[bytes] = '\0';
         if (strcmp(buffer_mensagem, "EMAIL_JA_CADASTRADO") == 0) {
             printf("Email ja cadastrado. Tente novamente.\n");
-            telaCadastro(socketCliente, cliente);
+            telaCadastro(socketMotorista, motorista);
         } else if (strcmp(buffer_mensagem, "CADASTRO_REALIZADO") == 0) {
             printf("Cadastro realizado com sucesso!\n");
-            cliente->status = AUTENTICADO;
+            motorista->status = AUTENTICADO;
         } else {
             printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
         }
     }
 }
 
-void telaInicial(int socketCliente, Cliente *cliente){
+void telaInicial(int socketMotorista, Motorista *motorista){
     int sair = 0;
     while (!sair) {
         int opcao = 0;
         printf("====================================\n");
-        printf("      Sistema de Login Cliente      \n");
+        printf("     Sistema de Login motorista     \n");
         printf("====================================\n");
         printf("| 1- LOGIN                         |\n");
         printf("| 2- CADASTRAR                     |\n");
@@ -164,15 +164,15 @@ void telaInicial(int socketCliente, Cliente *cliente){
 
         switch (opcao) {
             case 1:
-                telaLogin(socketCliente, cliente);
+                telaLogin(socketMotorista, motorista);
                 break;
             case 2:
-                telaCadastro(socketCliente, cliente);
+                telaCadastro(socketMotorista, motorista);
                 break;
             case 3:
                 printf("Saindo...\n");
-                send(socketCliente, "DESCONECTADO", 13, 0);
-                cliente->status = DESCONECTADO;
+                send(socketMotorista, "DESCONECTADO", 13, 0);
+                motorista->status = DESCONECTADO;
                 sair = 1;
                 break;
             default:
@@ -183,15 +183,15 @@ void telaInicial(int socketCliente, Cliente *cliente){
 }
 
 int main(){
-    int socketCliente;
+    int socketMotorista;
     struct sockaddr_in endereco_servidor;
     char buffer_mensagem[81] = {0};
     
-    Cliente *cliente = calloc(1, sizeof(Cliente));
+    Motorista *motorista = calloc(1, sizeof(Motorista));
 
-    if ((socketCliente = socket(AF_INET, SOCK_STREAM, 0)) < 0){
+    if ((socketMotorista = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         perror("Socket nao criado");
-        free(cliente);
+        free(motorista);
         exit(EXIT_FAILURE);
     }
 
@@ -202,31 +202,31 @@ int main(){
     struct hostent *host = gethostbyname("localhost");
     if (host == NULL) {
         perror("Erro ao resolver nome do host 'localhost'");
-        free(cliente);
-        close(socketCliente);
+        free(motorista);
+        close(socketMotorista);
         exit(EXIT_FAILURE);
     }
 
     memcpy(&endereco_servidor.sin_addr, host->h_addr_list[0], host->h_length);
 
-    int status = connect(socketCliente, (struct sockaddr*)&endereco_servidor, sizeof(endereco_servidor));
+    int status = connect(socketMotorista, (struct sockaddr*)&endereco_servidor, sizeof(endereco_servidor));
 
     if (status < 0){
         perror("conexao com o servidor nao estabelecida");
-        free(cliente);
-        close(socketCliente);
+        free(motorista);
+        close(socketMotorista);
         exit(EXIT_FAILURE);
     }
 
-    telaInicial(socketCliente, cliente);
+    telaInicial(socketMotorista, motorista);
     
-    ssize_t bytes = read(socketCliente, buffer_mensagem, 80);
+    ssize_t bytes = read(socketMotorista, buffer_mensagem, 80);
     if (bytes > 0) {
         buffer_mensagem[bytes] = '\0';
         printf("Mensagem do servidor: %s\n", buffer_mensagem);
     }
     
-    free(cliente);
-    close(socketCliente);
+    free(motorista);
+    close(socketMotorista);
     return 0;
 }

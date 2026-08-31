@@ -34,19 +34,60 @@ void salvarLoginMotorista(char *login){
     fclose(arquivo);
 }
 
-void tratarMotorista(int socketMotorista, char *acao){
-    char buffer_mensagem [150] = {0};
-    char *mensagem = "Recebi a mensagem motorista";
-
-    ssize_t bytes_lidos = read(socketMotorista, buffer_mensagem, 149);
-    buffer_mensagem[bytes_lidos] ='\0';
-    if (bytes_lidos > 0) {
-        buffer_mensagem[bytes_lidos] = '\0';
-        printf("Mensagem do motorista: %s\n", buffer_mensagem);
-        fflush(stdout);
-        salvarLoginMotorista(buffer_mensagem);
+void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
+    char dadosLogin[256] = {0};
+    int emailEncontrado = 0;
+    FILE *arquivo = fopen("dados/loginMotorista.json", "a+");
+    if (arquivo == NULL) {
+        perror("Erro ao abrir o arquivo");
+        close(socketMotorista);
+        return;
     }
-    send(socketMotorista, mensagem, strlen(mensagem), 0);
+    rewind(arquivo);
+
+    char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
+    char *senhaBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "senha"));
+    
+    if (strcmp(acao, "login") == 0) {
+        while(fgets(dadosLogin, sizeof(dadosLogin), arquivo) != NULL) {
+            cJSON *dadosJson = cJSON_Parse(dadosLogin);
+            if(dadosJson != NULL) {
+                char *email = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "email"));
+                char *senha = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "senha"));
+                if (strcmp(email, emailBuscado) == 0 && strcmp(senha, senhaBuscada) == 0) {
+                    send(socketMotorista, "AUTENTICADO", 12, 0);
+                    emailEncontrado = 1;
+                    break;
+                }
+            }
+            cJSON_Delete(dadosJson);
+        }
+        if (!emailEncontrado) {
+            send(socketMotorista, "NAO_AUTENTICADO", 17, 0);
+        }
+    } else if (strcmp(acao, "cadastro") == 0) {
+        while(fgets(dadosLogin, sizeof(dadosLogin), arquivo) != NULL) {
+            cJSON *dadosJson = cJSON_Parse(dadosLogin);
+            if(dadosJson != NULL) {
+                char *email = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "email"));
+                if (strcmp(email, emailBuscado) == 0) {
+                    send(socketMotorista, "EMAIL_JA_CADASTRADO", 20, 0);
+                    emailEncontrado = 1;
+                    break;
+                }
+            }
+            cJSON_Delete(dadosJson);
+        }
+        if (!emailEncontrado) {
+            char *saida = cJSON_PrintUnformatted(jsonLogin);
+            salvarLoginMotorista(saida);
+            send(socketMotorista, "CADASTRO_REALIZADO", 18, 0);
+            free(saida);
+        }
+    } else {
+        send(socketMotorista, "ACAO_DESCONHECIDA", 18, 0);
+    }
+    fclose(arquivo);
     return;
 }
 
@@ -136,7 +177,7 @@ void *rotinaTratamento(void *arg){
             if (strcmp(classe, "Cliente") == 0) {
                 tratarCliente(socket, json, cJSON_GetStringValue(cJSON_GetObjectItem(json, "acao")));
             } else if (strcmp(classe, "Motorista") == 0) {
-                tratarMotorista(socket, cJSON_GetStringValue(cJSON_GetObjectItem(json, "acao")));
+                tratarMotorista(socket, json, cJSON_GetStringValue(cJSON_GetObjectItem(json, "acao")));
             } else {
                 printf("Classe desconhecida: %s\n", classe);
                 close(socket);
