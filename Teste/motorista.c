@@ -37,6 +37,79 @@ void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int
     cJSON_Delete(enviar_dados);
 }
 
+void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
+    char buffer_mensagem[30] = {0};
+    char origem[50], destino[50];
+    int capacidade;
+
+    printf("Digite a origem do trecho: ");
+    scanf(" %49[^\n]", origem);
+    printf("Digite o destino do trecho: ");
+    scanf(" %49[^\n]", destino);
+    printf("Digite a capacidade do trecho: ");
+    scanf("%d", &capacidade);
+
+    cJSON *trecho = cJSON_CreateObject();
+    cJSON_AddStringToObject(trecho, "classe", "Motorista");
+    cJSON_AddStringToObject(trecho, "acao", "cadastrar_trecho");
+    cJSON_AddStringToObject(trecho, "origem", origem);
+    cJSON_AddStringToObject(trecho, "destino", destino);
+    cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
+    cJSON_AddStringToObject(trecho, "nome", motorista->nome);
+
+    char *mensagem = cJSON_PrintUnformatted(trecho);
+    
+    if (mensagem != NULL) {
+        write(socketMotorista, mensagem, strlen(mensagem));
+        free(mensagem);
+    }
+    cJSON_Delete(trecho);
+
+    ssize_t bytes = read(socketMotorista, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+    if (bytes > 0) {
+        buffer_mensagem[bytes] = '\0';
+        if (strcmp(buffer_mensagem, "TRECHO_CADASTRADO") == 0) {
+            printf("Trecho cadastrado com sucesso!\n");
+        } else {
+            printf("Falha ao cadastrar trecho, caminho possivel nao encontrado\n");
+        }
+    }
+}
+
+void telaMenu(int socketMotorista, Motorista *motorista){
+    char buffer_mensagem[18] = {0};
+    int escolha = 0;
+    int sair = 0;
+    int enviou = 0;
+
+    while(sair != 1){
+        printf("====================================\n");
+        printf("                MENU                \n");
+        printf("====================================\n");
+        printf(" 1- Cadastrar um Trecho\n");
+        printf(" 2- Cadastrar Trechos\n");
+        printf(" 3- Ver meus Trechos         \n");
+        printf(" 4- Voltar                          \n");
+        printf("====================================\n");
+        printf("Escolha uma opcao: ");
+        scanf("%d", &escolha);
+
+        if (escolha == 1) {
+            cadastrarTrecho(socketMotorista, motorista);
+        } else if (escolha == 2) {
+            printf("Digite sua senha: ");
+            scanf(" %49[^\n]", motorista->senha);
+        } else if (escolha == 3) {
+           continue;
+        } else if (escolha == 4) {
+            sair = 1;
+        } else {
+            printf("Opcao invalida. Tente novamente.\n");
+        }
+    }
+
+}
+
 void telaLogin(int socketMotorista, Motorista *motorista){
     char buffer_mensagem[18] = {0};
     int escolha = 0;
@@ -84,6 +157,8 @@ void telaLogin(int socketMotorista, Motorista *motorista){
             telaLogin(socketMotorista, motorista);
         } else if (strcmp(buffer_mensagem, "AUTENTICADO") == 0) {
             printf("Login realizado com sucesso!\n");
+            sair = 1;
+            telaMenu(socketMotorista, motorista);
             motorista->status = AUTENTICADO;
         } else {
             printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);

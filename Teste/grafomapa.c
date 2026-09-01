@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
+#include <strings.h>
 
 #define MAX_CIDADES 100
 #define MAX_LINHA 256
@@ -83,6 +85,64 @@ Grafo* carregarGrafoDeArquivo(const char* nomeArquivo) {
     return g;
 }
 
+// Retorna o ID da cidade cujo nome bate (ignorando maiusculas/minusculas), ou -1 se nao encontrar
+int buscarIdPorNome(Grafo* g, const char* nome) {
+    for (int i = 0; i < g->totalCidades; i++) {
+        if (g->cidades[i].id != -1 && strcasecmp(g->cidades[i].nome, nome) == 0) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+// Retorna 1 se existir caminho da cidade origem ate a cidade destino, 0 caso contrario
+int existeCaminhoBFSPorNome(Grafo* g, const char* nomeOrigem, const char* nomeDestino) {
+    int origem = buscarIdPorNome(g, nomeOrigem);
+    int destino = buscarIdPorNome(g, nomeDestino);
+
+    if (origem == -1) {
+        printf("Cidade de origem \"%s\" nao encontrada!\n", nomeOrigem);
+        return 0;
+    }
+    if (destino == -1) {
+        printf("Cidade de destino \"%s\" nao encontrada!\n", nomeDestino);
+        return 0;
+    }
+
+    if (origem == destino) {
+        return 1; // mesma cidade, caminho trivial
+    }
+
+    int visitado[MAX_CIDADES];
+    for (int i = 0; i < MAX_CIDADES; i++) visitado[i] = 0;
+
+    int fila[MAX_CIDADES];
+    int inicio = 0, fim = 0;
+
+    fila[fim++] = origem;
+    visitado[origem] = 1;
+
+    while (inicio < fim) {
+        int atual = fila[inicio++];
+
+        if (atual == destino) {
+            return 1;
+        }
+
+        Vizinho* v = g->cidades[atual].listaAdj;
+        while (v != NULL) {
+            int viz = v->idDestino;
+            if (!visitado[viz]) {
+                visitado[viz] = 1;
+                fila[fim++] = viz;
+            }
+            v = v->prox;
+        }
+    }
+
+    return 0;
+}
+
 void imprimirGrafo(Grafo* g) {
     printf("\n=== GRAFO DE CIDADES (SEM PESO) ===\n");
     for (int i = 0; i < g->totalCidades; i++) {
@@ -101,14 +161,4 @@ void imprimirGrafo(Grafo* g) {
             printf("\n");
         }
     }
-}
-
-int main() {
-    Grafo* mapa = carregarGrafoDeArquivo("mapa.txt");
-
-    if (mapa != NULL) {
-        imprimirGrafo(mapa);
-    }
-
-    return 0;
 }

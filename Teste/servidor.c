@@ -4,12 +4,15 @@
 #include <unistd.h>
 #include <pthread.h>
 #include "cJSON.h"
+#include "grafomapa.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
 
+Grafo *mapa;
+int idTrecho = 0;
 #define PORT 65432
 
 void salvarLoginCliente(char *login){
@@ -32,6 +35,36 @@ void salvarLoginMotorista(char *login){
     fprintf(arquivo, "%s\n", login);
     fflush(arquivo);
     fclose(arquivo);
+}
+
+int cadastrarTrecho(char *nomeMotorista,char *origem, char *destino, int capacidade) {
+    if (mapa == NULL) {
+        printf("Mapa nao carregado. Nao e possivel cadastrar trecho.\n");
+        return 0;
+    }
+    if (existeCaminhoBFSPorNome(mapa, origem, destino)) {
+        FILE *arquivo = fopen("trechosCadastrados/trechos.json", "a");
+        if (arquivo == NULL) {
+            perror("Erro ao abrir o arquivo de trechos");
+            return 0;
+        }
+        cJSON *trecho = cJSON_CreateObject();
+        cJSON_AddNumberToObject(trecho, "idTrecho", idTrecho);
+        cJSON_AddStringToObject(trecho, "nomeMotorista", nomeMotorista);
+        cJSON_AddStringToObject(trecho, "origem", origem);
+        cJSON_AddStringToObject(trecho, "destino", destino);
+        cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
+        char *saida = cJSON_PrintUnformatted(trecho);
+        fprintf(arquivo, "%s\n", saida);
+        free(saida);
+        cJSON_Delete(trecho);
+        fclose(arquivo);
+        idTrecho++;
+        return 1;
+    } else {
+        return 0;
+    }
+    
 }
 
 void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
@@ -83,6 +116,22 @@ void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
             salvarLoginMotorista(saida);
             send(socketMotorista, "CADASTRO_REALIZADO", 18, 0);
             free(saida);
+        }
+    } else if (strcmp(acao, "cadastrar_trecho") == 0) {
+        char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
+        char *origem = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origem"));
+        char *destino = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "destino"));
+        int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "capacidade"));
+
+        if (mapa != NULL) {
+            int caminhoEncontrado = cadastrarTrecho(nomeMotorista,origem, destino, capacidade);
+            if (caminhoEncontrado) {
+                send(socketMotorista, "TRECHO_CADASTRADO", 18, 0);
+            } else {
+                send(socketMotorista, "FALHA_CADASTRO_TRECHO", 22, 0);
+            }
+        } else {
+            send(socketMotorista, "MAPA_NAO_CARREGADO", 20, 0);
         }
     } else {
         send(socketMotorista, "ACAO_DESCONHECIDA", 18, 0);
@@ -208,6 +257,8 @@ int main(){
     int limite_clientes = 10;
     socklen_t tamanho_endereco;
     int valor_opcao = 1;
+
+    mapa = carregarGrafoDeArquivo("mapa.txt");
     
     if ((socketServidor = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         perror("Arquivo socket nao criado");
