@@ -83,6 +83,17 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     }
 }
 
+void cadastrarTrechos(int socketMotorista, Motorista *motorista) {
+    int quantidade;
+    printf("Digite a quantidade de trechos que deseja cadastrar: ");
+    scanf("%d", &quantidade);
+
+    for (int i = 0; i < quantidade; i++) {
+        printf("Cadastro do trecho %d:\n", i + 1);
+        cadastrarTrecho(socketMotorista, motorista);
+    }
+}
+
 void listarTrechos(int socketMotorista, Motorista *motorista){
     char buffer_mensagem[4096] = {0};
     int total = 0;
@@ -163,8 +174,7 @@ void telaMenu(int socketMotorista, Motorista *motorista){
         if (escolha == 1) {
             cadastrarTrecho(socketMotorista, motorista);
         } else if (escolha == 2) {
-            printf("Digite sua senha: ");
-            scanf(" %49[^\n]", motorista->senha);
+            cadastrarTrechos(socketMotorista, motorista);
         } else if (escolha == 3) {
             listarTrechos(socketMotorista, motorista);
         } else if (escolha == 4) {
