@@ -10,9 +10,11 @@
 #include <netinet/in.h>
 #include <fcntl.h>
 #include <arpa/inet.h>
+#include <time.h>
 
 Grafo *mapa;
 int idTrecho = 0;
+pthread_mutex_t trechosMutex = PTHREAD_MUTEX_INITIALIZER;
 #define PORT 65432
 
 void encontrarID(){
@@ -34,6 +36,77 @@ void encontrarID(){
         }
     }
     fclose(arquivo);
+}
+
+int trechoExpirado(const char *data, const char *hora) {
+    struct tm trechoTm = {0};
+    int dia, mes, ano, horaInt, minuto;
+
+    if (data == NULL || hora == NULL) return 0;
+    if (sscanf(data, "%d/%d/%d", &dia, &mes, &ano) != 3) return 0;
+    if (sscanf(hora, "%d:%d", &horaInt, &minuto) != 2) return 0;
+
+    trechoTm.tm_mday = dia;
+    trechoTm.tm_mon  = mes - 1;
+    trechoTm.tm_year = ano - 1900;
+    trechoTm.tm_hour = horaInt;
+    trechoTm.tm_min  = minuto;
+    trechoTm.tm_sec  = 0;
+    trechoTm.tm_isdst = -1;
+
+    time_t tempoTrecho = mktime(&trechoTm);
+    if (tempoTrecho == (time_t)-1) return 0;
+
+    return tempoTrecho < time(NULL);
+}
+
+void limparTrechosExpirados(void) {
+    pthread_mutex_lock(&trechosMutex);
+
+    FILE *origem = fopen("trechosCadastrados/trechos.json", "r");
+    if (origem == NULL) {
+        pthread_mutex_unlock(&trechosMutex);
+        return;
+    }
+
+    FILE *temp = fopen("trechosCadastrados/trechos.tmp", "w");
+    if (temp == NULL) {
+        fclose(origem);
+        pthread_mutex_unlock(&trechosMutex);
+        return;
+    }
+
+    char linha[256];
+    while (fgets(linha, sizeof(linha), origem) != NULL) {
+        cJSON *trecho = cJSON_Parse(linha);
+        if (trecho == NULL) continue;
+
+        char *data = cJSON_GetStringValue(cJSON_GetObjectItem(trecho, "data"));
+        char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(trecho, "hora"));
+
+        if (!trechoExpirado(data, hora)) {
+            fputs(linha, temp);
+        }
+
+        cJSON_Delete(trecho);
+    }
+
+    fclose(origem);
+    fclose(temp);
+
+    remove("trechosCadastrados/trechos.json");
+    rename("trechosCadastrados/trechos.tmp", "trechosCadastrados/trechos.json");
+
+    pthread_mutex_unlock(&trechosMutex);
+}
+
+void *rotinaLimpezaTrechos(void *arg) {
+    (void)arg;
+    while (1) {
+        limparTrechosExpirados();
+        sleep(60);
+    }
+    return NULL;
 }
 
 void salvarLoginCliente(char *login){
@@ -368,6 +441,13 @@ int main(){
     if(status < 0){
         perror("Espera nao feita");
         exit(EXIT_FAILURE);
+    }
+
+    pthread_t threadLimpeza;
+    if (pthread_create(&threadLimpeza, NULL, rotinaLimpezaTrechos, NULL) != 0) {
+        perror("Erro ao criar thread de limpeza");
+    } else {
+        pthread_detach(threadLimpeza);
     }
 
     tamanho_endereco = sizeof(endereco_conexao);
