@@ -15,6 +15,27 @@ Grafo *mapa;
 int idTrecho = 0;
 #define PORT 65432
 
+void encontrarID(){
+    FILE *arquivo = fopen("trechosCadastrados/trechos.json", "r");
+    if (arquivo == NULL) {
+        perror("Erro ao abrir o arquivo de trechos");
+        return;
+    }
+
+    char linha[256];
+    while (fgets(linha, sizeof(linha), arquivo) != NULL) {
+        cJSON *trechoJson = cJSON_Parse(linha);
+        if (trechoJson != NULL) {
+            int id = cJSON_GetNumberValue(cJSON_GetObjectItem(trechoJson, "idTrecho"));
+            if (id >= idTrecho) {
+                idTrecho = id + 1;
+            }
+            cJSON_Delete(trechoJson);
+        }
+    }
+    fclose(arquivo);
+}
+
 void salvarLoginCliente(char *login){
     FILE *arquivo = fopen("dados/loginCliente.json", "a");
     if (arquivo == NULL) {
@@ -315,6 +336,7 @@ int main(){
     socklen_t tamanho_endereco;
     int valor_opcao = 1;
 
+    encontrarID();
     mapa = carregarGrafoDeArquivo("mapa.txt");
     
     if ((socketServidor = socket(AF_INET, SOCK_STREAM, 0)) < 0){
