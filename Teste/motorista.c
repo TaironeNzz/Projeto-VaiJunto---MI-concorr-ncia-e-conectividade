@@ -38,14 +38,19 @@ void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int
 }
 
 void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
-    char buffer_mensagem[30] = {0};
+    char buffer_mensagem[256] = {0};
     char origem[50], destino[50];
+    char data[11], hora[6];
     int capacidade;
 
     printf("Digite a origem do trecho: ");
     scanf(" %49[^\n]", origem);
     printf("Digite o destino do trecho: ");
     scanf(" %49[^\n]", destino);
+    printf("Digite a data do trecho: ");
+    scanf(" %10[^\n]", data);
+    printf("Digite a hora do trecho: ");
+    scanf(" %5[^\n]", hora);
     printf("Digite a capacidade do trecho: ");
     scanf("%d", &capacidade);
 
@@ -54,6 +59,8 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     cJSON_AddStringToObject(trecho, "acao", "cadastrar_trecho");
     cJSON_AddStringToObject(trecho, "origem", origem);
     cJSON_AddStringToObject(trecho, "destino", destino);
+    cJSON_AddStringToObject(trecho, "data", data);
+    cJSON_AddStringToObject(trecho, "hora", hora);
     cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
     cJSON_AddStringToObject(trecho, "nome", motorista->nome);
 
@@ -76,10 +83,11 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     }
 }
 
-void listarTrechos(int socketMotorista,Motorista *motorista){
-    char buffer_mensagem[256] = {0};
+void listarTrechos(int socketMotorista, Motorista *motorista){
+    char buffer_mensagem[4096] = {0};
+    int total = 0;
+
     cJSON *enviar_dados = cJSON_CreateObject();
-    
     cJSON_AddStringToObject(enviar_dados, "classe", "Motorista");
     cJSON_AddStringToObject(enviar_dados, "nome", motorista->nome);
     cJSON_AddStringToObject(enviar_dados, "email", motorista->email);
@@ -87,21 +95,51 @@ void listarTrechos(int socketMotorista,Motorista *motorista){
     cJSON_AddStringToObject(enviar_dados, "acao", "listar_trechos");
 
     char *mensagem = cJSON_PrintUnformatted(enviar_dados);
-    
     if (mensagem != NULL) {
         write(socketMotorista, mensagem, strlen(mensagem));
         free(mensagem);
     }
     cJSON_Delete(enviar_dados);
 
-    int chegando = 0;
-    while (chegando != 1){
-        ssize_t bytes = read(socketMotorista, buffer_mensagem, 20);
-        if (bytes > 0) {
-            buffer_mensagem[bytes] = '\0';
-            
-        }
+    printf("====================================\n");
+    printf("          Meus Trechos              \n");
+
+    cJSON *arrayResposta = NULL;
+    while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
+        ssize_t bytes = read(socketMotorista, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
+        if (bytes <= 0) break;
+        total += bytes;
+        buffer_mensagem[total] = '\0';
+        arrayResposta = cJSON_Parse(buffer_mensagem);
     }
+
+    if (arrayResposta == NULL) {
+        printf("Erro ao obter lista de trechos.\n");
+        return;
+    }
+
+    int n = cJSON_GetArraySize(arrayResposta);
+    if (n == 0) {
+        printf("Nenhum trecho cadastrado\n");
+    }
+    for (int i = 0; i < n; i++) {
+        cJSON *item = cJSON_GetArrayItem(arrayResposta, i);
+        int id = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "id"));
+        char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(item, "origem"));
+        char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(item, "destino"));
+        int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "capacidade"));
+        char *data = cJSON_GetStringValue(cJSON_GetObjectItem(item, "data"));
+        char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(item, "hora"));
+        printf("====================================\n");
+        printf("ID: %d\n", id);
+        printf("Origem: %s\n", cidadeOrigem);
+        printf("Destino: %s\n", cidadeDestino);
+        printf("Data: %s\n", data);
+        printf("Hora: %s\n", hora);
+        printf("Capacidade: %d\n", capacidade);
+    }
+    printf("====================================\n");
+    cJSON_Delete(arrayResposta);
 }
 
 void telaMenu(int socketMotorista, Motorista *motorista){
@@ -116,8 +154,8 @@ void telaMenu(int socketMotorista, Motorista *motorista){
         printf("====================================\n");
         printf(" 1- Cadastrar um Trecho\n");
         printf(" 2- Cadastrar Trechos\n");
-        printf(" 3- Ver meus Trechos         \n");
-        printf(" 4- Voltar                          \n");
+        printf(" 3- Ver meus Trechos\n");
+        printf(" 4- Sair da Conta\n");
         printf("====================================\n");
         printf("Escolha uma opcao: ");
         scanf("%d", &escolha);
@@ -128,7 +166,7 @@ void telaMenu(int socketMotorista, Motorista *motorista){
             printf("Digite sua senha: ");
             scanf(" %49[^\n]", motorista->senha);
         } else if (escolha == 3) {
-           continue;
+            listarTrechos(socketMotorista, motorista);
         } else if (escolha == 4) {
             sair = 1;
         } else {

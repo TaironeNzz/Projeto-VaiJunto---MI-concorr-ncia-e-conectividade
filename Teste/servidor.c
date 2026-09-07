@@ -37,7 +37,7 @@ void salvarLoginMotorista(char *login){
     fclose(arquivo);
 }
 
-int cadastrarTrecho(char *nomeMotorista,char *origem, char *destino, int capacidade) {
+int cadastrarTrecho(char *nomeMotorista,char *origem, char *destino, char *data, char *hora, int capacidade) {
     if (mapa == NULL) {
         printf("Mapa nao carregado. Nao e possivel cadastrar trecho.\n");
         return 0;
@@ -53,6 +53,8 @@ int cadastrarTrecho(char *nomeMotorista,char *origem, char *destino, int capacid
         cJSON_AddStringToObject(trecho, "nomeMotorista", nomeMotorista);
         cJSON_AddStringToObject(trecho, "origem", origem);
         cJSON_AddStringToObject(trecho, "destino", destino);
+        cJSON_AddStringToObject(trecho, "data", data);
+        cJSON_AddStringToObject(trecho, "hora", hora);
         cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
         char *saida = cJSON_PrintUnformatted(trecho);
         fprintf(arquivo, "%s\n", saida);
@@ -141,9 +143,11 @@ void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
         char *origem = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origem"));
         char *destino = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "destino"));
         int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "capacidade"));
+        char *data = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "data"));
+        char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "hora"));
 
         if (mapa != NULL) {
-            int caminhoEncontrado = cadastrarTrecho(nomeMotorista,origem, destino, capacidade);
+            int caminhoEncontrado = cadastrarTrecho(nomeMotorista,origem, destino, data, hora, capacidade);
             if (caminhoEncontrado) {
                 send(socketMotorista, "TRECHO_CADASTRADO", 18, 0);
             } else {
@@ -153,32 +157,39 @@ void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
             send(socketMotorista, "MAPA_NAO_CARREGADO", 20, 0);
         }
     } else if (strcmp(acao, "listar_trechos") == 0) {
-        while(fgets(dadosTrechos, sizeof(dadosTrechos), arquivo2) != NULL) {
-            cJSON *trechosJson = cJSON_Parse(dadosTrechos);
-            if(trechosJson != NULL) {
-                int id = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "id"));
-                char *nomeMotoristaTrecho = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "nomeMotorista"));
-                char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "origem"));
-                char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "destino"));
-                int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "capacidade"));
-                char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
-                if (strcmp(nomeMotorista, nomeMotoristaTrecho) == 0) {
-                    cJSON *respostaJson = cJSON_CreateObject();
-                    if (respostaJson != NULL){
-                        cJSON_AddNumberToObject(respostaJson,"id",id);
-                        cJSON_AddStringToObject(respostaJson,"origem",cidadeOrigem);
-                        cJSON_AddStringToObject(respostaJson,"destino",cidadeDestino);
-                        cJSON_AddNumberToObject(respostaJson,"capacidade",capacidade);
-                    }
-                    char *resposta = cJSON_PrintUnformatted(respostaJson);
-                    
-                    send(socketMotorista, resposta, strlen(resposta), 0);
-                    cJSON_Delete(respostaJson);
-                }
+        cJSON *arrayResposta = cJSON_CreateArray();
+
+    while (fgets(dadosTrechos, sizeof(dadosTrechos), arquivo2) != NULL) {
+        cJSON *trechosJson = cJSON_Parse(dadosTrechos);
+        if (trechosJson != NULL) {
+            int id = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "idTrecho"));
+            char *nomeMotoristaTrecho = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "nomeMotorista"));
+            char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "origem"));
+            char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "destino"));
+            int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "capacidade"));
+            char *data = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "data"));
+            char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "hora"));
+            char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
+
+            if (nomeMotoristaTrecho != NULL && nomeMotorista != NULL &&
+                strcmp(nomeMotorista, nomeMotoristaTrecho) == 0) {
+                cJSON *item = cJSON_CreateObject();
+                cJSON_AddNumberToObject(item, "id", id);
+                cJSON_AddStringToObject(item, "origem", cidadeOrigem);
+                cJSON_AddStringToObject(item, "destino", cidadeDestino);
+                cJSON_AddNumberToObject(item, "capacidade", capacidade);
+                cJSON_AddStringToObject(item, "data", data);
+                cJSON_AddStringToObject(item, "hora", hora);
+                cJSON_AddItemToArray(arrayResposta, item);
             }
-            cJSON_Delete(trechosJson);
         }
-        send(socketMotorista, "Acabou", 7, 0);
+        cJSON_Delete(trechosJson);
+    }
+
+    char *resposta = cJSON_PrintUnformatted(arrayResposta);
+    send(socketMotorista, resposta, strlen(resposta), 0);
+    free(resposta);
+    cJSON_Delete(arrayResposta);
     } else {
         send(socketMotorista, "ACAO_DESCONHECIDA", 18, 0);
     }
@@ -246,10 +257,10 @@ void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
 void *rotinaTratamento(void *arg){
     int socket = *(int*)arg;
     free(arg);
-    char buffer_mensagem [150] = {0};
+    char buffer_mensagem [256] = {0};
     cJSON *json = NULL;
     while (1){
-        ssize_t bytes_lidos = read(socket, buffer_mensagem, 149);
+        ssize_t bytes_lidos = read(socket, buffer_mensagem, 255);
 
         if (bytes_lidos <= 0) {
             break;
