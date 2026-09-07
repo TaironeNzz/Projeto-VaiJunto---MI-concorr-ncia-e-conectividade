@@ -69,6 +69,7 @@ int cadastrarTrecho(char *nomeMotorista,char *origem, char *destino, int capacid
 
 void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
     char dadosLogin[256] = {0};
+    char dadosTrechos[256] = {0};
     int emailEncontrado = 0;
     FILE *arquivo = fopen("dados/loginMotorista.json", "a+");
     if (arquivo == NULL) {
@@ -77,6 +78,14 @@ void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
         return;
     }
     rewind(arquivo);
+
+    FILE *arquivo2 = fopen("trechosCadastrados/trechos.json", "a+");
+    if (arquivo2 == NULL) {
+        perror("Erro ao abrir o arquivo");
+        close(socketMotorista);
+        return;
+    }
+    rewind(arquivo2);
 
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *senhaBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "senha"));
@@ -88,8 +97,18 @@ void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
                 char *email = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "email"));
                 char *senha = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "senha"));
                 if (strcmp(email, emailBuscado) == 0 && strcmp(senha, senhaBuscada) == 0) {
-                    send(socketMotorista, "AUTENTICADO", 12, 0);
+                    char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson,"nome"));
+                    cJSON *respostaJson = cJSON_CreateObject();
+                    if (respostaJson != NULL){
+                        if (nome != NULL){
+                            cJSON_AddStringToObject(respostaJson,"nome", nome);
+                        }
+                    }
+                    char *resposta = cJSON_PrintUnformatted(respostaJson);
+                    
+                    send(socketMotorista, resposta, strlen(resposta), 0);
                     emailEncontrado = 1;
+                    cJSON_Delete(respostaJson);
                     break;
                 }
             }
@@ -133,6 +152,33 @@ void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
         } else {
             send(socketMotorista, "MAPA_NAO_CARREGADO", 20, 0);
         }
+    } else if (strcmp(acao, "listar_trechos") == 0) {
+        while(fgets(dadosTrechos, sizeof(dadosTrechos), arquivo2) != NULL) {
+            cJSON *trechosJson = cJSON_Parse(dadosTrechos);
+            if(trechosJson != NULL) {
+                int id = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "id"));
+                char *nomeMotoristaTrecho = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "nomeMotorista"));
+                char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "origem"));
+                char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "destino"));
+                int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "capacidade"));
+                char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
+                if (strcmp(nomeMotorista, nomeMotoristaTrecho) == 0) {
+                    cJSON *respostaJson = cJSON_CreateObject();
+                    if (respostaJson != NULL){
+                        cJSON_AddNumberToObject(respostaJson,"id",id);
+                        cJSON_AddStringToObject(respostaJson,"origem",cidadeOrigem);
+                        cJSON_AddStringToObject(respostaJson,"destino",cidadeDestino);
+                        cJSON_AddNumberToObject(respostaJson,"capacidade",capacidade);
+                    }
+                    char *resposta = cJSON_PrintUnformatted(respostaJson);
+                    
+                    send(socketMotorista, resposta, strlen(resposta), 0);
+                    cJSON_Delete(respostaJson);
+                }
+            }
+            cJSON_Delete(trechosJson);
+        }
+        send(socketMotorista, "Acabou", 7, 0);
     } else {
         send(socketMotorista, "ACAO_DESCONHECIDA", 18, 0);
     }

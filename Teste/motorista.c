@@ -76,6 +76,34 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     }
 }
 
+void listarTrechos(int socketMotorista,Motorista *motorista){
+    char buffer_mensagem[256] = {0};
+    cJSON *enviar_dados = cJSON_CreateObject();
+    
+    cJSON_AddStringToObject(enviar_dados, "classe", "Motorista");
+    cJSON_AddStringToObject(enviar_dados, "nome", motorista->nome);
+    cJSON_AddStringToObject(enviar_dados, "email", motorista->email);
+    cJSON_AddStringToObject(enviar_dados, "senha", motorista->senha);
+    cJSON_AddStringToObject(enviar_dados, "acao", "listar_trechos");
+
+    char *mensagem = cJSON_PrintUnformatted(enviar_dados);
+    
+    if (mensagem != NULL) {
+        write(socketMotorista, mensagem, strlen(mensagem));
+        free(mensagem);
+    }
+    cJSON_Delete(enviar_dados);
+
+    int chegando = 0;
+    while (chegando != 1){
+        ssize_t bytes = read(socketMotorista, buffer_mensagem, 20);
+        if (bytes > 0) {
+            buffer_mensagem[bytes] = '\0';
+            
+        }
+    }
+}
+
 void telaMenu(int socketMotorista, Motorista *motorista){
     char buffer_mensagem[18] = {0};
     int escolha = 0;
@@ -111,7 +139,7 @@ void telaMenu(int socketMotorista, Motorista *motorista){
 }
 
 void telaLogin(int socketMotorista, Motorista *motorista){
-    char buffer_mensagem[18] = {0};
+    char buffer_mensagem[50] = {0};
     int escolha = 0;
     int sair = 0;
     int enviou = 0;
@@ -149,19 +177,24 @@ void telaLogin(int socketMotorista, Motorista *motorista){
         return;
     }
 
-    int bytes = read(socketMotorista, buffer_mensagem, 17);
+    int bytes = read(socketMotorista, buffer_mensagem, sizeof(buffer_mensagem) - 1);
     if (bytes > 0) {
         buffer_mensagem[bytes] = '\0';
         if (strcmp(buffer_mensagem, "NAO_AUTENTICADO") == 0) {
             printf("Email ou senha incorretos. Tente novamente.\n");
             telaLogin(socketMotorista, motorista);
-        } else if (strcmp(buffer_mensagem, "AUTENTICADO") == 0) {
-            printf("Login realizado com sucesso!\n");
-            sair = 1;
-            telaMenu(socketMotorista, motorista);
-            motorista->status = AUTENTICADO;
-        } else {
-            printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
+            return;
+        }
+        cJSON *respostaJSON = cJSON_Parse(buffer_mensagem);
+        if (respostaJSON != NULL){
+            char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(respostaJSON, "nome"));
+            if (nome != NULL){
+                printf("Login realizado com sucesso!\n");
+                motorista->status = AUTENTICADO;
+                strncpy(motorista->nome, nome, sizeof(nome) - 1);
+                motorista->nome[sizeof(nome) - 1] = '\0';
+                telaMenu(socketMotorista, motorista);
+            }
         }
     }
 }
