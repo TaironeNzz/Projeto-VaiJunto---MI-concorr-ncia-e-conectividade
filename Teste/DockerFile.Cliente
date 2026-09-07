@@ -1,0 +1,10 @@
+# Dockerfile.cliente
+FROM gcc:13
+
+WORKDIR /app
+
+COPY . .
+
+RUN gcc cliente.c cJSON.c -o cliente_bin
+
+CMD ["./cliente_bin"]

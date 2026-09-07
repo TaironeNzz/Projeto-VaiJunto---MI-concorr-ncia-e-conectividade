@@ -1,0 +1,15 @@
+# Dockerfile.servidor
+FROM gcc:13
+
+WORKDIR /app
+
+COPY . .
+
+RUN mkdir -p dados trechosCadastrados
+RUN mkdir -p dados1 dados
+
+RUN gcc servidor.c grafomapa.c cJSON.c -o servidor_bin -lpthread
+
+EXPOSE 65432
+
+CMD ["./servidor_bin"]

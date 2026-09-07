@@ -1,0 +1,10 @@
+# Dockerfile.motorista
+FROM gcc:13
+
+WORKDIR /app
+
+COPY . .
+
+RUN gcc motorista.c cJSON.c -o motorista_bin
+
+CMD ["./motorista_bin"]
