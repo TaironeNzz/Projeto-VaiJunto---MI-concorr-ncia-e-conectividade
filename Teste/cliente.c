@@ -37,6 +37,112 @@ void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int
     cJSON_Delete(enviar_dados);
 }
 
+void buscarCarona(int socketCliente, Cliente *cliente) {
+    char buffer_mensagem[256] = {0};
+    char origem[50], destino[50];
+    char data[11], hora[6];
+    int total = 0;
+
+    printf("Digite a origem da carona: ");
+    scanf(" %49[^\n]", origem);
+    printf("Digite o destino da carona: ");
+    scanf(" %49[^\n]", destino);
+    printf("Digite a data da carona: ");
+    scanf(" %10[^\n]", data);
+    printf("Digite a hora da carona: ");
+    scanf(" %5[^\n]", hora);
+
+    cJSON *carona = cJSON_CreateObject();
+    cJSON_AddStringToObject(carona, "classe", "Cliente");
+    cJSON_AddStringToObject(carona, "acao", "buscar_carona");
+    cJSON_AddStringToObject(carona, "origem", origem);
+    cJSON_AddStringToObject(carona, "destino", destino);
+    cJSON_AddStringToObject(carona, "data", data);
+    cJSON_AddStringToObject(carona, "hora", hora);
+
+    char *mensagem = cJSON_PrintUnformatted(carona);
+    if (mensagem != NULL) {
+        write(socketCliente, mensagem, strlen(mensagem));
+        free(mensagem);
+    }
+    cJSON_Delete(carona);
+
+    printf("====================================\n");
+    printf("         Caronas encontradas        \n");
+
+    cJSON *arrayResposta = NULL;
+    while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
+        ssize_t bytes = read(socketCliente, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
+        if (bytes <= 0) break;
+        total += bytes;
+        buffer_mensagem[total] = '\0';
+        arrayResposta = cJSON_Parse(buffer_mensagem);
+    }
+
+    if (arrayResposta == NULL) {
+        printf("Erro ao obter lista de trechos.\n");
+        return;
+    }
+
+    int n = cJSON_GetArraySize(arrayResposta);
+    if (n == 0) {
+        printf("Carona nao encontrada\n");
+    }
+    for (int i = 0; i < n; i++) {
+        cJSON *item = cJSON_GetArrayItem(arrayResposta, i);
+        int id = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "id"));
+        char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(item, "origem"));
+        char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(item, "destino"));
+        int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "capacidade"));
+        char *data = cJSON_GetStringValue(cJSON_GetObjectItem(item, "data"));
+        char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(item, "hora"));
+        char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(item, "nomeMotorista"));
+        printf("====================================\n");
+        printf("ID: %d\n", id);
+        printf("Motorista: %s\n", nomeMotorista);
+        printf("Origem: %s\n", cidadeOrigem);
+        printf("Destino: %s\n", cidadeDestino);
+        printf("Data: %s\n", data);
+        printf("Hora: %s\n", hora);
+        printf("Capacidade: %d\n", capacidade);
+    }
+    printf("====================================\n");
+    cJSON_Delete(arrayResposta);
+}
+
+void telaMenu(int socketCliente, Cliente *cliente){
+    char buffer_mensagem[18] = {0};
+    int escolha = 0;
+    int sair = 0;
+    int enviou = 0;
+
+    while(sair != 1){
+        printf("====================================\n");
+        printf("                MENU                \n");
+        printf("====================================\n");
+        printf(" 1- Buscar Carona\n");
+        printf(" 2- \n");
+        printf(" 3- Ver minhas Caronas\n");
+        printf(" 4- Sair da Conta\n");
+        printf("====================================\n");
+        printf("Escolha uma opcao: ");
+        scanf("%d", &escolha);
+
+        if (escolha == 1) {
+            buscarCarona(socketCliente, cliente);
+        } else if (escolha == 2) {
+            continue;
+        } else if (escolha == 3) {
+            continue;
+        } else if (escolha == 4) {
+            sair = 1;
+        } else {
+            printf("Opcao invalida. Tente novamente.\n");
+        }
+    }
+
+}
+
 void telaLogin(int socketCliente, Cliente *cliente){
     char buffer_mensagem[18] = {0};
     int escolha = 0;
@@ -84,6 +190,7 @@ void telaLogin(int socketCliente, Cliente *cliente){
             telaLogin(socketCliente, cliente);
         } else if (strcmp(buffer_mensagem, "AUTENTICADO") == 0) {
             printf("Login realizado com sucesso!\n");
+            telaMenu(socketCliente, cliente);
             cliente->status = AUTENTICADO;
         } else {
             printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);

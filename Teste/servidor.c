@@ -304,6 +304,7 @@ void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
 
 void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
     char dadosLogin[256] = {0};
+    char dadosTrechos[256] = {0};
     int emailEncontrado = 0;
     FILE *arquivo = fopen("dados/loginCliente.json", "a+");
     if (arquivo == NULL) {
@@ -356,6 +357,53 @@ void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
             free(saida);
         }
         pthread_mutex_unlock(&loginClienteMutex);
+    } else if (strcmp(acao, "buscar_carona") == 0) {
+        pthread_mutex_lock(&trechosMutex);
+        FILE *arquivo2 = fopen("trechosCadastrados/trechos.json", "a+");
+        if (arquivo2 == NULL) {
+            perror("Erro ao abrir o arquivo");
+            pthread_mutex_unlock(&trechosMutex);
+            fclose(arquivo);
+            return;
+        }
+        rewind(arquivo2);
+        cJSON *arrayResposta = cJSON_CreateArray();
+        char *origemBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origem"));
+        char *destinoBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "destino"));
+
+        while (fgets(dadosTrechos, sizeof(dadosTrechos), arquivo2) != NULL) {
+            cJSON *trechosJson = cJSON_Parse(dadosTrechos);
+            if (trechosJson != NULL) {
+                int id = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "idTrecho"));
+                char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "nomeMotorista"));
+                char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "origem"));
+                char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "destino"));
+                int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "capacidade"));
+                char *data = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "data"));
+                char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "hora"));
+
+                if (cidadeOrigem != NULL && cidadeDestino != NULL &&
+                    origemBuscada != NULL && destinoBuscado != NULL &&
+                    strcmp(cidadeOrigem, origemBuscada) == 0 && strcmp(cidadeDestino, destinoBuscado) == 0) {
+                    cJSON *item = cJSON_CreateObject();
+                    cJSON_AddNumberToObject(item, "id", id);
+                    cJSON_AddStringToObject(item, "nomeMotorista", nomeMotorista);
+                    cJSON_AddStringToObject(item, "origem", cidadeOrigem);
+                    cJSON_AddStringToObject(item, "destino", cidadeDestino);
+                    cJSON_AddNumberToObject(item, "capacidade", capacidade);
+                    cJSON_AddStringToObject(item, "data", data);
+                    cJSON_AddStringToObject(item, "hora", hora);
+                    cJSON_AddItemToArray(arrayResposta, item);
+                }
+            }
+            cJSON_Delete(trechosJson);
+        }
+        fclose(arquivo2);
+        pthread_mutex_unlock(&trechosMutex);
+        char *resposta = cJSON_PrintUnformatted(arrayResposta);
+        send(socketCliente, resposta, strlen(resposta), 0);
+        free(resposta);
+        cJSON_Delete(arrayResposta);
     } else {
         send(socketCliente, "ACAO_DESCONHECIDA", 18, 0);
     }
