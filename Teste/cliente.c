@@ -174,7 +174,7 @@ void telaMenu(int socketCliente, Cliente *cliente){
         printf("                MENU                \n");
         printf("====================================\n");
         printf(" 1- Buscar Carona\n");
-        printf(" 2- \n");
+        printf(" 2- Cancelar Reserva\n");
         printf(" 3- Ver minhas Caronas\n");
         printf(" 4- Sair da Conta\n");
         printf("====================================\n");
