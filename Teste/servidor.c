@@ -186,6 +186,7 @@ int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
     int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "capacidade"));
     char *data = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "data"));
     char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "hora"));
+    float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "preco"));
 
     if (mapa != NULL) {
         if (existeCaminhoBFSPorNome(mapa, origem, destino)) {
@@ -203,6 +204,7 @@ int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
             cJSON_AddStringToObject(trecho, "data", data);
             cJSON_AddStringToObject(trecho, "hora", hora);
             cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
+            cJSON_AddNumberToObject(trecho, "preco", preco);
             char *saida = cJSON_PrintUnformatted(trecho);
             fprintf(arquivoTrechos, "%s\n", saida);
             free(saida);
@@ -236,6 +238,7 @@ void listar_trechos(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
             char *data = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "data"));
             char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "hora"));
             char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
+            float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "preco"));
 
             if (nomeMotoristaTrecho != NULL && nomeMotorista != NULL &&
                 strcmp(nomeMotorista, nomeMotoristaTrecho) == 0) {
@@ -246,6 +249,7 @@ void listar_trechos(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
                 cJSON_AddNumberToObject(item, "capacidade", capacidade);
                 cJSON_AddStringToObject(item, "data", data);
                 cJSON_AddStringToObject(item, "hora", hora);
+                cJSON_AddNumberToObject(item, "preco", preco);
                 cJSON_AddItemToArray(arrayResposta, item);
             }
         }
@@ -384,6 +388,7 @@ void buscar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
             int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "capacidade"));
             char *data = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "data"));
             char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "hora"));
+            float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "preco"));
 
             if (cidadeOrigem != NULL && cidadeDestino != NULL &&
                 origemBuscada != NULL && destinoBuscado != NULL &&
@@ -396,6 +401,7 @@ void buscar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
                 cJSON_AddNumberToObject(item, "capacidade", capacidade);
                 cJSON_AddStringToObject(item, "data", data);
                 cJSON_AddStringToObject(item, "hora", hora);
+                cJSON_AddNumberToObject(item, "preco", preco);
                 cJSON_AddItemToArray(arrayResposta, item);
             }
         }

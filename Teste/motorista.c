@@ -42,6 +42,7 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     char origem[50], destino[50];
     char data[11], hora[6];
     int capacidade;
+    float preco;
 
     printf("Digite a origem do trecho: ");
     scanf(" %49[^\n]", origem);
@@ -53,6 +54,8 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     scanf(" %5[^\n]", hora);
     printf("Digite a capacidade do trecho: ");
     scanf("%d", &capacidade);
+    printf("Digite o preco do trecho: ");
+    scanf("%f", &preco);
 
     cJSON *trecho = cJSON_CreateObject();
     cJSON_AddStringToObject(trecho, "classe", "Motorista");
@@ -62,6 +65,7 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     cJSON_AddStringToObject(trecho, "data", data);
     cJSON_AddStringToObject(trecho, "hora", hora);
     cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
+    cJSON_AddNumberToObject(trecho, "preco", preco);
     cJSON_AddStringToObject(trecho, "nome", motorista->nome);
 
     char *mensagem = cJSON_PrintUnformatted(trecho);

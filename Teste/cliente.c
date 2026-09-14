@@ -99,6 +99,7 @@ void buscarCarona(int socketCliente, Cliente *cliente) {
         char *data = cJSON_GetStringValue(cJSON_GetObjectItem(item, "data"));
         char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(item, "hora"));
         char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(item, "nomeMotorista"));
+        float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "preco"));
         printf("====================================\n");
         printf("ID: %d\n", id);
         printf("Motorista: %s\n", nomeMotorista);
@@ -107,6 +108,7 @@ void buscarCarona(int socketCliente, Cliente *cliente) {
         printf("Data: %s\n", data);
         printf("Hora: %s\n", hora);
         printf("Capacidade: %d\n", capacidade);
+        printf("Preco: %.2f\n", preco);
     }
     printf("====================================\n");
     cJSON_Delete(arrayResposta);
