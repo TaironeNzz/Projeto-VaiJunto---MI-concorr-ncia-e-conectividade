@@ -482,8 +482,12 @@ void selecionar_carona(cJSON *jsonLogin, int socketCliente){
 
     if (trechoEncontrado) {
         send(socketCliente, "CARONA_RESERVADA", 16, 0);
-    } else {
+    } else if (!trechoEncontrado) {
+        send(socketCliente, "TRECHO_NAO_ENCONTRADO", 22, 0);  
+    } else if (semAssento) {
         send(socketCliente, "ASSENTO_INDISPONIVEL", 20, 0);
+    } else {
+        send(socketCliente, "ERRO_RESERVA", 12, 0);
     }
 }
 

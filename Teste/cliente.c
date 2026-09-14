@@ -88,6 +88,26 @@ void buscarCarona(int socketCliente, Cliente *cliente) {
     int n = cJSON_GetArraySize(arrayResposta);
     if (n == 0) {
         printf("CARONAS NAO ENCONTRADAS\n");
+        int sair = 0;
+        while(!sair){
+            printf("================================================\n");
+            printf("DESEJA CRIAR UMA ROTA COM MOTORISTAS DIFERENTES?\n");
+            printf("================================================\n");
+            printf(" 1- SIM\n");
+            printf(" 2- NAO\n");
+            printf("====================================\n");
+            printf("Escolha uma opcao: ");
+            int escolha;
+            scanf("%d", &escolha);
+            if (escolha == 1) {
+                sair = 1;
+            } else if (escolha == 2) {
+                sair = 1;
+            } else {
+                printf("Opcao invalida. Tente novamente.\n");
+            }
+        }
+
         return;
     }
     for (int i = 0; i < n; i++) {

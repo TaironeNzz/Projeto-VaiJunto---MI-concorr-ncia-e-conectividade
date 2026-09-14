@@ -7,17 +7,20 @@
 #define MAX_CIDADES 100
 #define MAX_LINHA 256
 
-// Estrutura para os vizinhos na lista encadeada (sem peso)
-typedef struct Vizinho {
-    int idDestino;
-    struct Vizinho* prox;
-} Vizinho;
+// 1. ESTRUTURAS (Declaradas na ordem correta)
 
-// Estrutura para a cidade/vértice
+// Estrutura para cada trecho oferecido por um motorista
+typedef struct Carona {
+    int idDestino;
+    char nomeMotorista[50];
+    struct Carona* prox;
+} Carona;
+
+// Estrutura para a Cidade
 typedef struct {
     int id;
     char nome[50];
-    Vizinho* listaAdj;
+    Carona* listaCaronas; // Lista encadeada de caronas disponíveis
 } Cidade;
 
 // Estrutura do Grafo
@@ -26,24 +29,36 @@ typedef struct {
     int totalCidades;
 } Grafo;
 
+// Estrutura auxiliar para rastrear os trechos durante a busca DFS
+typedef struct {
+    int idOrigem;
+    int idDestino;
+    char nomeMotorista[50];
+} Trecho;
+
+// 2. FUNÇÕES DO GRAFO
+
 Grafo* criarGrafo() {
     Grafo* g = (Grafo*)malloc(sizeof(Grafo));
     g->totalCidades = 0;
     for (int i = 0; i < MAX_CIDADES; i++) {
         g->cidades[i].id = -1;
-        g->cidades[i].listaAdj = NULL;
+        g->cidades[i].listaCaronas = NULL;
     }
     return g;
 }
 
-// Função para adicionar vizinho sem peso
-void adicionarVizinho(Grafo* g, int origId, int destId) {
-    Vizinho* novo = (Vizinho*)malloc(sizeof(Vizinho));
-    novo->idDestino = destId;
-    novo->prox = g->cidades[origId].listaAdj;
-    g->cidades[origId].listaAdj = novo;
+// Adiciona uma oferta de carona entre duas cidades
+void oferecerCarona(Grafo* g, int origId, int destId, const char* nomeMotorista) {
+    Carona* nova = (Carona*)malloc(sizeof(Carona));
+    nova->idDestino = destId;
+    strcpy(nova->nomeMotorista, nomeMotorista);
+    
+    nova->prox = g->cidades[origId].listaCaronas;
+    g->cidades[origId].listaCaronas = nova;
 }
 
+// Carrega cidades e cria ofertas "padrão" a partir de arquivo CSV
 Grafo* carregarGrafoDeArquivo(const char* nomeArquivo) {
     FILE* arq = fopen(nomeArquivo, "r");
     if (!arq) {
@@ -55,18 +70,16 @@ Grafo* carregarGrafoDeArquivo(const char* nomeArquivo) {
     char linha[MAX_LINHA];
 
     while (fgets(linha, sizeof(linha), arq)) {
-        linha[strcspn(linha, "\r\n")] = 0; // Remove quebras de linha
+        linha[strcspn(linha, "\r\n")] = 0;
         if (strlen(linha) == 0) continue;
 
-        // 1. Extrai o ID da cidade
         char* token = strtok(linha, ",");
         if (!token) continue;
         int id = atoi(token);
 
-        // 2. Extrai o Nome da cidade
         token = strtok(NULL, ",");
         if (!token) continue;
-        while (*token == ' ') token++; // Remove espacos iniciais
+        while (*token == ' ') token++;
         
         g->cidades[id].id = id;
         strcpy(g->cidades[id].nome, token);
@@ -74,10 +87,10 @@ Grafo* carregarGrafoDeArquivo(const char* nomeArquivo) {
             g->totalCidades = id + 1;
         }
 
-        // 3. Extrai apenas os IDs dos vizinhos
+        // Lê os vizinhos e adiciona como caronas padrão (Sistema/Linha)
         while ((token = strtok(NULL, ",")) != NULL) {
             int vizinhoId = atoi(token);
-            adicionarVizinho(g, id, vizinhoId);
+            oferecerCarona(g, id, vizinhoId, "Sistema/Linha");
         }
     }
 
@@ -85,7 +98,6 @@ Grafo* carregarGrafoDeArquivo(const char* nomeArquivo) {
     return g;
 }
 
-// Retorna o ID da cidade cujo nome bate (ignorando maiusculas/minusculas), ou -1 se nao encontrar
 int buscarIdPorNome(Grafo* g, const char* nome) {
     for (int i = 0; i < g->totalCidades; i++) {
         if (g->cidades[i].id != -1 && strcasecmp(g->cidades[i].nome, nome) == 0) {
@@ -95,70 +107,82 @@ int buscarIdPorNome(Grafo* g, const char* nome) {
     return -1;
 }
 
-// Retorna 1 se existir caminho da cidade origem ate a cidade destino, 0 caso contrario
-int existeCaminhoBFSPorNome(Grafo* g, const char* nomeOrigem, const char* nomeDestino) {
+// 3. FUNÇÕES DE BUSCA DE ROTAS (DFS + BACKTRACKING)
+
+void buscarTodasRotasDFS(Grafo* g, int atual, int destino, int visitado[], Trecho caminho[], int tamCaminho, int* contadorRotas) {
+    if (atual == destino) {
+        (*contadorRotas)++;
+        printf("\n--- OPÇÃO DE ROTA %d ---\n", *contadorRotas);
+        for (int i = 0; i < tamCaminho; i++) {
+            printf("  Trecho %d: %s -> %s (Motorista: %s)\n", 
+                   i + 1, 
+                   g->cidades[caminho[i].idOrigem].nome, 
+                   g->cidades[caminho[i].idDestino].nome, 
+                   caminho[i].nomeMotorista);
+        }
+        return;
+    }
+
+    visitado[atual] = 1;
+
+    Carona* c = g->cidades[atual].listaCaronas;
+    while (c != NULL) {
+        int vizinho = c->idDestino;
+
+        if (!visitado[vizinho]) {
+            caminho[tamCaminho].idOrigem = atual;
+            caminho[tamCaminho].idDestino = vizinho;
+            strcpy(caminho[tamCaminho].nomeMotorista, c->nomeMotorista);
+
+            buscarTodasRotasDFS(g, vizinho, destino, visitado, caminho, tamCaminho + 1, contadorRotas);
+        }
+        c = c->prox;
+    }
+
+    visitado[atual] = 0; // Backtracking
+}
+
+void listarTodasAsRotasCaronas(Grafo* g, const char* nomeOrigem, const char* nomeDestino) {
     int origem = buscarIdPorNome(g, nomeOrigem);
     int destino = buscarIdPorNome(g, nomeDestino);
 
-    if (origem == -1) {
-        printf("Cidade de origem \"%s\" nao encontrada!\n", nomeOrigem);
-        return 0;
-    }
-    if (destino == -1) {
-        printf("Cidade de destino \"%s\" nao encontrada!\n", nomeDestino);
-        return 0;
+    if (origem == -1 || destino == -1) {
+        printf("Origem ou destino nao encontrados!\n");
+        return;
     }
 
-    if (origem == destino) {
-        return 1; // mesma cidade, caminho trivial
+    int visitado[MAX_CIDADES] = {0};
+    Trecho caminho[MAX_CIDADES];
+    int contadorRotas = 0;
+
+    printf("\n=======================================================");
+    printf("\n  BUSCANDO TODAS AS ROTAS: %s -> %s", g->cidades[origem].nome, g->cidades[destino].nome);
+    printf("\n=======================================================\n");
+
+    buscarTodasRotasDFS(g, origem, destino, visitado, caminho, 0, &contadorRotas);
+
+    if (contadorRotas == 0) {
+        printf("Nenhuma rota encontrada.\n");
+    } else {
+        printf("\nTotal de combinações de rotas encontradas: %d\n", contadorRotas);
     }
-
-    int visitado[MAX_CIDADES];
-    for (int i = 0; i < MAX_CIDADES; i++) visitado[i] = 0;
-
-    int fila[MAX_CIDADES];
-    int inicio = 0, fim = 0;
-
-    fila[fim++] = origem;
-    visitado[origem] = 1;
-
-    while (inicio < fim) {
-        int atual = fila[inicio++];
-
-        if (atual == destino) {
-            return 1;
-        }
-
-        Vizinho* v = g->cidades[atual].listaAdj;
-        while (v != NULL) {
-            int viz = v->idDestino;
-            if (!visitado[viz]) {
-                visitado[viz] = 1;
-                fila[fim++] = viz;
-            }
-            v = v->prox;
-        }
-    }
-
-    return 0;
 }
 
 void imprimirGrafo(Grafo* g) {
-    printf("\n=== GRAFO DE CIDADES (SEM PESO) ===\n");
+    printf("\n=== GRAFO DE CARONAS ===\n");
     for (int i = 0; i < g->totalCidades; i++) {
         if (g->cidades[i].id != -1) {
             printf("\n[%d] Cidade: %s\n", g->cidades[i].id, g->cidades[i].nome);
-            printf("    Conecta com: ");
+            printf("    Caronas saindo daqui:\n");
             
-            Vizinho* v = g->cidades[i].listaAdj;
-            if (v == NULL) {
-                printf("Nenhuma conexão");
+            Carona* c = g->cidades[i].listaCaronas;
+            if (c == NULL) {
+                printf("    Nenhuma carona cadastrada.\n");
             }
-            while (v != NULL) {
-                printf("[%d %s] ", v->idDestino, g->cidades[v->idDestino].nome);
-                v = v->prox;
+            while (c != NULL) {
+                printf("    -> Para: %s (Motorista: %s)\n", g->cidades[c->idDestino].nome, c->nomeMotorista);
+                c = c->prox;
             }
-            printf("\n");
         }
     }
 }
