@@ -482,13 +482,96 @@ void selecionar_carona(cJSON *jsonLogin, int socketCliente){
 
     if (trechoEncontrado) {
         send(socketCliente, "CARONA_RESERVADA", 16, 0);
-    } else if (!trechoEncontrado) {
-        send(socketCliente, "TRECHO_NAO_ENCONTRADO", 22, 0);  
     } else if (semAssento) {
         send(socketCliente, "ASSENTO_INDISPONIVEL", 20, 0);
     } else {
-        send(socketCliente, "ERRO_RESERVA", 12, 0);
+        send(socketCliente, "TRECHO_NAO_ENCONTRADO", 21, 0); 
     }
+}
+
+//naaaaaaoooooo termineeeeeii
+void combinarTrechos(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
+    cJSON *rotasArray = buscar_rotas_no_grafo(jsonLogin, arquivoTrechos);
+    char dadosTrechos[256] = {0};
+
+    if (rotasArray == NULL){
+        send(socketCliente, "NENHUMA_ROTA_ENCONTRADA", 23, 0);
+        return;
+    }
+    int totalRotas = cJSON_GetArraySize(rotasArray);
+    if (totalRotas == 0) {
+        send(socketCliente, "NENHUMA_ROTA_ENCONTRADA", 23, 0);
+        cJSON_Delete(rotasArray);
+        return;
+    }
+    cJSON *arrayResposta = cJSON_CreateArray();
+
+    for (int i = 0; i < totalRotas; i++) {
+        cJSON *rotaObj = cJSON_GetArrayItem(rotasArray, i);
+        cJSON *trechosArray = cJSON_GetObjectItem(rotaObj, "trechos");
+
+        if (!trechosArray || !cJSON_IsArray(trechosArray)) continue;
+            
+        int totalTrechos = cJSON_GetArraySize(trechosArray);
+        for (int j = 0; j < totalTrechos; j++) {
+            cJSON *trechoObj = cJSON_GetArrayItem(trechosArray, j);
+
+            cJSON *idObj = cJSON_GetObjectItem(trechoObj, "id");
+            cJSON *origemObj = cJSON_GetObjectItem(trechoObj, "origem");
+            cJSON *destinoObj = cJSON_GetObjectItem(trechoObj, "destino");
+            cJSON *motoristaObj = cJSON_GetObjectItem(trechoObj, "nomeMotorista");
+
+            int id = idObj ? idObj->valueint : -1;
+            char *origem = cJSON_GetStringValue(origemObj);
+            char *destino = cJSON_GetStringValue(destinoObj);
+            char *motorista = cJSON_GetStringValue(motoristaObj);
+            
+            pthread_mutex_lock(&trechosMutex);
+            if (arquivoTrechos == NULL) {
+                perror("Erro ao abrir o arquivo");
+                pthread_mutex_unlock(&trechosMutex);
+                return;
+            }
+            rewind(arquivoTrechos);
+
+            while (fgets(dadosTrechos, sizeof(dadosTrechos), arquivoTrechos) != NULL) {
+                cJSON *trechosJson = cJSON_Parse(dadosTrechos);
+                if (trechosJson != NULL) {
+                    int id = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "idTrecho"));
+                    char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "nomeMotorista"));
+                    char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "origem"));
+                    char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "destino"));
+                    int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "capacidade"));
+                    char *data = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "data"));
+                    char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "hora"));
+                    float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "preco"));
+
+                    if (cidadeOrigem != NULL && cidadeDestino != NULL &&
+                        origem != NULL && destino != NULL &&
+                        strcmp(cidadeOrigem, origem) == 0 && strcmp(cidadeDestino, destino) == 0
+                        && capacidade > 0) {
+                        cJSON *item = cJSON_CreateObject();
+                        cJSON_AddNumberToObject(item, "id", id);
+                        cJSON_AddStringToObject(item, "nomeMotorista", nomeMotorista);
+                        cJSON_AddStringToObject(item, "origem", cidadeOrigem);
+                        cJSON_AddStringToObject(item, "destino", cidadeDestino);
+                        cJSON_AddNumberToObject(item, "capacidade", capacidade);
+                        cJSON_AddStringToObject(item, "data", data);
+                        cJSON_AddStringToObject(item, "hora", hora);
+                        cJSON_AddNumberToObject(item, "preco", preco);
+                        cJSON_AddItemToArray(arrayResposta, item);
+                    }
+                    cJSON_Delete(trechosJson);
+                }  
+            }
+            pthread_mutex_unlock(&trechosMutex);
+        }
+    }
+    char *resposta = cJSON_PrintUnformatted(arrayResposta);
+    send(socketCliente, resposta, strlen(resposta), 0);
+    free(resposta);
+    cJSON_Delete(arrayResposta);
+    cJSON_Delete(rotasArray);
 }
 
 void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
@@ -519,6 +602,8 @@ void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
         buscar_carona(jsonLogin, socketCliente, arquivoTrechos);
     } else if (strcmp(acao, "selecionar_carona") == 0) {
         selecionar_carona(jsonLogin, socketCliente);
+    } else if (strcmp(acao, "combinar_trechos") == 0) {
+        combinarTrechos(jsonLogin, socketCliente, arquivoTrechos);
     } else {
         send(socketCliente, "ACAO_DESCONHECIDA", 17, 0);
     }
