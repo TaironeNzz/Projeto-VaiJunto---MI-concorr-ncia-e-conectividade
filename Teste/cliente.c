@@ -69,6 +69,7 @@ void buscarCarona(int socketCliente, Cliente *cliente) {
 
     printf("====================================\n");
     printf("         Caronas encontradas        \n");
+    printf("====================================\n");
 
     cJSON *arrayResposta = NULL;
     while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
@@ -86,7 +87,8 @@ void buscarCarona(int socketCliente, Cliente *cliente) {
 
     int n = cJSON_GetArraySize(arrayResposta);
     if (n == 0) {
-        printf("Carona nao encontrada\n");
+        printf("CARONAS NAO ENCONTRADAS\n");
+        return;
     }
     for (int i = 0; i < n; i++) {
         cJSON *item = cJSON_GetArrayItem(arrayResposta, i);
@@ -108,6 +110,35 @@ void buscarCarona(int socketCliente, Cliente *cliente) {
     }
     printf("====================================\n");
     cJSON_Delete(arrayResposta);
+
+    printf("Selecione a carona desejada pelo ID (ou 00 para voltar): \n");
+    int idSelecionado;
+    scanf("%d", &idSelecionado);
+    cJSON *respostaSelecionada = cJSON_CreateObject();
+    cJSON_AddStringToObject(respostaSelecionada, "classe", "Cliente");
+    cJSON_AddStringToObject(respostaSelecionada, "acao", "selecionar_carona");
+    cJSON_AddNumberToObject(respostaSelecionada, "idSelecionado", idSelecionado);
+    cJSON_AddStringToObject(respostaSelecionada, "origem", origem);
+    cJSON_AddStringToObject(respostaSelecionada, "destino", destino);
+    char *mensagemSelecionada = cJSON_PrintUnformatted(respostaSelecionada);
+    if (mensagemSelecionada != NULL) {
+        write(socketCliente, mensagemSelecionada, strlen(mensagemSelecionada));
+        free(mensagemSelecionada);
+    }
+    cJSON_Delete(respostaSelecionada);
+
+    int bytes = read(socketCliente, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+    if (bytes > 0) {
+        buffer_mensagem[bytes] = '\0';
+        if (strcmp(buffer_mensagem, "CARONA_RESERVADA") == 0) {
+            printf("Carona reservada com sucesso!\n");
+        } else if (strcmp(buffer_mensagem, "ASSENTO_INDISPONIVEL") == 0) {
+            printf("Assento indisponível. Tente outra carona.\n");
+        } else {
+            printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
+        }
+    }
+
 }
 
 void telaMenu(int socketCliente, Cliente *cliente){
@@ -147,53 +178,55 @@ void telaLogin(int socketCliente, Cliente *cliente){
     char buffer_mensagem[18] = {0};
     int escolha = 0;
     int sair = 0;
-    int enviou = 0;
+    int autenticado = 0;
 
-    while(sair != 1){
-        printf("====================================\n");
-        printf("                Login               \n");
-        printf("====================================\n");
-        printf(" 1- Email: %s\n", cliente->email);
-        printf(" 2- Senha: %s\n", cliente->senha);
-        printf(" 3- Enviar Login                    \n");
-        printf(" 4- Voltar                          \n");
-        printf("====================================\n");
-        printf("Escolha uma opcao: ");
-        scanf("%d", &escolha);
+    while (!autenticado && !sair) {
+        int enviou = 0;
+        while (sair != 1 && !enviou) {
+            printf("====================================\n");
+            printf("                Login               \n");
+            printf("====================================\n");
+            printf(" 1- Email: %s\n", cliente->email);
+            printf(" 2- Senha: %s\n", cliente->senha);
+            printf(" 3- Enviar Login                    \n");
+            printf(" 4- Voltar                          \n");
+            printf("====================================\n");
+            printf("Escolha uma opcao: ");
+            scanf("%d", &escolha);
 
-        if (escolha == 1) {
-            printf("Digite seu email: ");
-            scanf(" %49[^\n]", cliente->email);
-        } else if (escolha == 2) {
-            printf("Digite sua senha: ");
-            scanf(" %49[^\n]", cliente->senha);
-        } else if (escolha == 3) {
-            enviarCadastro(socketCliente, cliente->nome, cliente->email, cliente->senha, 1);
-            enviou = 1;
-            break;
-        } else if (escolha == 4) {
-            sair = 1;
-        } else {
-            printf("Opcao invalida. Tente novamente.\n");
+            if (escolha == 1) {
+                printf("Digite seu email: ");
+                scanf(" %49[^\n]", cliente->email);
+            } else if (escolha == 2) {
+                printf("Digite sua senha: ");
+                scanf(" %49[^\n]", cliente->senha);
+            } else if (escolha == 3) {
+                enviarCadastro(socketCliente, cliente->nome, cliente->email, cliente->senha, 1);
+                enviou = 1;
+            } else if (escolha == 4) {
+                sair = 1;
+            } else {
+                printf("Opcao invalida. Tente novamente.\n");
+            }
         }
-    }
 
-    if (!enviou) {
-        return;
-    }
+        if (sair) {
+            return;
+        }
 
-    int bytes = read(socketCliente, buffer_mensagem, 17);
-    if (bytes > 0) {
-        buffer_mensagem[bytes] = '\0';
-        if (strcmp(buffer_mensagem, "NAO_AUTENTICADO") == 0) {
-            printf("Email ou senha incorretos. Tente novamente.\n");
-            telaLogin(socketCliente, cliente);
-        } else if (strcmp(buffer_mensagem, "AUTENTICADO") == 0) {
-            printf("Login realizado com sucesso!\n");
-            telaMenu(socketCliente, cliente);
-            cliente->status = AUTENTICADO;
-        } else {
-            printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
+        int bytes = read(socketCliente, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+        if (bytes > 0) {
+            buffer_mensagem[bytes] = '\0';
+            if (strcmp(buffer_mensagem, "NAO_AUTENTICADO") == 0) {
+                printf("Email ou senha incorretos. Tente novamente.\n");
+            } else if (strcmp(buffer_mensagem, "AUTENTICADO") == 0) {
+                printf("Login realizado com sucesso!\n");
+                cliente->status = AUTENTICADO;
+                autenticado = 1;
+                telaMenu(socketCliente, cliente);
+            } else {
+                printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
+            }
         }
     }
 }
@@ -240,7 +273,7 @@ void telaCadastro(int socketCliente, Cliente *cliente){
         return;
     }
 
-    ssize_t bytes = read(socketCliente, buffer_mensagem, 20);
+    ssize_t bytes = read(socketCliente, buffer_mensagem, sizeof(buffer_mensagem) - 1);
     if (bytes > 0) {
         buffer_mensagem[bytes] = '\0';
         if (strcmp(buffer_mensagem, "EMAIL_JA_CADASTRADO") == 0) {
