@@ -58,6 +58,11 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     scanf("%f", &preco);
 
     cJSON *trecho = cJSON_CreateObject();
+    cJSON *arrayClientes = cJSON_CreateArray();
+    if (arrayClientes == NULL){
+        printf("Array de clientes nao criado!\n");
+        return;
+    }
     cJSON_AddStringToObject(trecho, "classe", "Motorista");
     cJSON_AddStringToObject(trecho, "acao", "cadastrar_trecho");
     cJSON_AddStringToObject(trecho, "origem", origem);
@@ -67,6 +72,7 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
     cJSON_AddNumberToObject(trecho, "preco", preco);
     cJSON_AddStringToObject(trecho, "nome", motorista->nome);
+    cJSON_AddItemToObject(trecho, "clientes", arrayClientes);
 
     char *mensagem = cJSON_PrintUnformatted(trecho);
     
@@ -195,8 +201,10 @@ void telaLogin(int socketMotorista, Motorista *motorista){
     int escolha = 0;
     int sair = 0;
     int enviou = 0;
+    fflush(stdin);
 
     while(sair != 1){
+        
         printf("====================================\n");
         printf("                Login               \n");
         printf("====================================\n");

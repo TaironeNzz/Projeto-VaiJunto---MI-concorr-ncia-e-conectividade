@@ -8,6 +8,54 @@
 extern pthread_mutex_t trechosMutex;
 extern Grafo *mapa;
 
+bool existeCaminhoBFSPorNome(Grafo* g, const char* origem, const char* destino) {
+    if (!g || !origem || !destino) return false;
+
+    // 1. Obtem os IDs correspondentes aos nomes
+    int origId = buscarIdPorNome(g, origem);
+    int destId = buscarIdPorNome(g, destino);
+
+    // Se alguma das cidades nao existir no mapa
+    if (origId == -1 || destId == -1) return false;
+
+    // Se origem e destino forem a mesma cidade
+    if (origId == destId) return true;
+
+    // 2. Estruturas para o algoritmo BFS
+    bool visitado[MAX_CIDADES] = { false };
+    int fila[MAX_CIDADES];
+    int inicio = 0, fim = 0;
+
+    // Enfileira a cidade de origem
+    fila[fim++] = origId;
+    visitado[origId] = true;
+
+    // 3. Execucao da BFS
+    while (inicio < fim) {
+        int atual = fila[inicio++];
+
+        // Se chegou ao destino, existe caminho
+        if (atual == destId) {
+            return true;
+        }
+
+        // Percorre todas as cidades vizinhas na lista de adjacência
+        Vizinho* v = g->cidades[atual].listaAdj;
+        while (v != NULL) {
+            int vizinhoId = v->idDestino;
+
+            if (!visitado[vizinhoId]) {
+                visitado[vizinhoId] = true;
+                fila[fim++] = vizinhoId;
+            }
+            v = v->prox;
+        }
+    }
+
+    // Se esvaziou a fila e nao encontrou o destino
+    return false;
+}
+
 Grafo* criarGrafo(void) {
     Grafo* g = (Grafo*)malloc(sizeof(Grafo));
     g->totalCidades = 0;
@@ -150,7 +198,68 @@ cJSON* buscar_rotas_no_grafo(cJSON *jsonLogin, FILE *arquivoTrechos) {
         Trecho caminho[MAX_CIDADES];
         dfsParaJSON(mapa, grafoCaronas, origId, destId, visitado, caminho, 0, arrayResposta);
     }
-
     liberarGrafo(grafoCaronas);
     return arrayResposta; // Retorna o JSON direto para a lógica interna do Servidor
+}
+
+void adicionarVizinho(Grafo* g, int origId, int destId) {
+    if (!g || origId < 0 || origId >= MAX_CIDADES) return;
+
+    Vizinho* novo = (Vizinho*)malloc(sizeof(Vizinho));
+    if (!novo) return;
+
+    novo->idDestino = destId;
+    novo->prox = g->cidades[origId].listaAdj;
+    g->cidades[origId].listaAdj = novo;
+}
+
+Grafo* carregarGrafoDeArquivo(const char* nomeArquivo) {
+    FILE* arq = fopen(nomeArquivo, "r");
+    if (!arq) {
+        printf("Erro ao abrir o arquivo %s!\n", nomeArquivo);
+        return NULL;
+    }
+
+    Grafo* g = criarGrafo();
+    char linha[256];
+
+    while (fgets(linha, sizeof(linha), arq) != NULL) {
+        // Remove quebra de linha (\r ou \n) no final
+        linha[strcspn(linha, "\r\n")] = 0;
+        if (strlen(linha) == 0) continue; // Pula linhas vazias
+
+        // 1. Extrai o ID da cidade
+        char* token = strtok(linha, ",");
+        if (!token) continue;
+        int id = atoi(token);
+
+        if (id < 0 || id >= MAX_CIDADES) continue; // Valida limites do array
+
+        // 2. Extrai o Nome da cidade
+        token = strtok(NULL, ",");
+        if (!token) continue;
+
+        // Remove espacos em branco no inicio do nome
+        while (*token == ' ') token++;
+
+        g->cidades[id].id = id;
+        strncpy(g->cidades[id].nome, token, 49);
+        g->cidades[id].nome[49] = '\0';
+
+        // Atualiza o total de cidades com base no maior ID encontrado
+        if (id + 1 > g->totalCidades) {
+            g->totalCidades = id + 1;
+        }
+
+        // 3. Extrai os IDs dos vizinhos (demais elementos separados por vírgula)
+        while ((token = strtok(NULL, ",")) != NULL) {
+            int destId = atoi(token);
+            if (destId >= 0 && destId < MAX_CIDADES) {
+                adicionarVizinho(g, id, destId);
+            }
+        }
+    }
+
+    fclose(arq);
+    return g;
 }

@@ -1,6 +1,6 @@
 #ifndef GRAFOMAPA_H
 #define GRAFOMAPA_H
-
+#include <stdbool.h>
 #include "cJSON.h"
 #include <pthread.h>
 
@@ -43,7 +43,7 @@ void adicionarVizinho(Grafo* g, int origId, int destId);
 void oferecerCarona(Grafo* g, int idTrecho, int origId, int destId, const char* nomeMotorista);
 Grafo* carregarGrafoDeArquivo(const char* nomeArquivo);
 int buscarIdPorNome(Grafo* g, const char* nome);
-
+bool existeCaminhoBFSPorNome(Grafo* g, const char* origem, const char* destino);
 // AGORA RETORNA cJSON* (Sem o socketCliente)
 cJSON* buscar_rotas_no_grafo(cJSON *jsonLogin, FILE *arquivoTrechos);
 

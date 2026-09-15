@@ -11,8 +11,8 @@ WORKDIR /app
 COPY . /app
 
 # 2. Compila os dois binários vinculando pthreads e cJSON
-RUN gcc -D_XOPEN_SOURCE=600 servidor.c -o servidor -lpthread -lcjson
-RUN gcc cliente.c cJSON.c -o cliente
+RUN gcc -D_XOPEN_SOURCE=600 servidor.c -o servidor_bin -lpthread -lcjson
+RUN gcc cliente.c cJSON.c -o cliente_bin
 
 // gcc servidor.c grafomapa.c cJSON.c -o servidor_bin -lpthread
 // gcc motorista.c cJSON.c -o motorista_bin
