@@ -627,6 +627,7 @@ int main(){
     int socketCliente;
     struct sockaddr_in endereco_servidor;
     char buffer_mensagem[81] = {0};
+    char ip_servidor[100];
     
     Cliente *cliente = calloc(1, sizeof(Cliente));
 
@@ -639,10 +640,13 @@ int main(){
     memset(&endereco_servidor, 0, sizeof(endereco_servidor));
     endereco_servidor.sin_family = AF_INET;
     endereco_servidor.sin_port = htons(PORT);
+    
+    printf("Digite o IP do servidor: ");
+    scanf("%99s", ip_servidor);
 
-    struct hostent *host = gethostbyname("localhost");
+    struct hostent *host = gethostbyname(ip_servidor);
     if (host == NULL) {
-        perror("Erro ao resolver nome do host 'localhost'");
+        perror("ENDERECO IP NAO ENCONTRADO NA REDE!");
         free(cliente);
         close(socketCliente);
         exit(EXIT_FAILURE);

@@ -1,10 +1,14 @@
-# Dockerfile.cliente
-FROM gcc:13
+# Usar a imagem oficial do GCC
+FROM gcc:latest
 
+# Definir o diretório de trabalho
 WORKDIR /app
 
+# Copiar todos os arquivos do diretório atual para o container
 COPY . .
 
-RUN gcc cliente.c cJSON.c -o cliente_bin
+# Compilar o cliente com a biblioteca cJSON
+RUN gcc  cliente.c cJSON.c -o cliente_bin
 
+# Comando para iniciar o cliente
 CMD ["./cliente_bin"]

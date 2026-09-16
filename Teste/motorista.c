@@ -195,6 +195,96 @@ void cancelarTrecho(int socketMotorista, Motorista *motorista){
     }
 }
 
+void cadastrarRotaMotorista(int socketMotorista, Motorista *motorista){
+    cJSON *arrayTrechos = cJSON_CreateArray();
+    if (arrayTrechos == NULL) { printf("Erro ao criar objeto JSON\n"); return; }
+
+    char destinoAnterior[50] = {0};
+    int totalAdicionados = 0;
+    int sair = 0;
+
+    while (!sair) {
+        char origem[50], destino[50];
+        char data[11], hora[6];
+        int capacidade;
+        float preco;
+
+        printf("====================================\n");
+        printf("     Trecho %d da rota               \n", totalAdicionados + 1);
+        printf("====================================\n");
+
+        if (totalAdicionados == 0) {
+            printf("Digite a origem do trecho: ");
+            scanf(" %49[^\n]", origem);
+        } else {
+            strncpy(origem, destinoAnterior, sizeof(origem) - 1);
+            origem[sizeof(origem) - 1] = '\0';
+            printf("Origem (continuando do trecho anterior): %s\n", origem);
+        }
+
+        printf("Digite o destino do trecho: ");
+        scanf(" %49[^\n]", destino);
+        printf("Digite a data do trecho: ");
+        scanf(" %10[^\n]", data);
+        printf("Digite a hora do trecho: ");
+        scanf(" %5[^\n]", hora);
+        printf("Digite a capacidade do trecho: ");
+        scanf("%d", &capacidade);
+        printf("Digite o preco do trecho: ");
+        scanf("%f", &preco);
+
+        cJSON *trecho = cJSON_CreateObject();
+        cJSON_AddStringToObject(trecho, "origem", origem);
+        cJSON_AddStringToObject(trecho, "destino", destino);
+        cJSON_AddStringToObject(trecho, "data", data);
+        cJSON_AddStringToObject(trecho, "hora", hora);
+        cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
+        cJSON_AddNumberToObject(trecho, "preco", preco);
+        cJSON_AddItemToArray(arrayTrechos, trecho);
+
+        strncpy(destinoAnterior, destino, sizeof(destinoAnterior) - 1);
+        destinoAnterior[sizeof(destinoAnterior) - 1] = '\0';
+        totalAdicionados++;
+
+        printf("1- Adicionar mais um trecho a rota\n");
+        printf("2- Finalizar e enviar a rota\n");
+        printf("Escolha uma opcao: ");
+        int escolha;
+        scanf("%d", &escolha);
+        if (escolha != 1) {
+            sair = 1;
+        }
+    }
+
+    cJSON *pedido = cJSON_CreateObject();
+    cJSON_AddStringToObject(pedido, "classe", "Motorista");
+    cJSON_AddStringToObject(pedido, "acao", "cadastrar_rota");
+    cJSON_AddStringToObject(pedido, "nome", motorista->nome);
+    cJSON_AddItemToObject(pedido, "trechos", arrayTrechos);
+
+    char *mensagem = cJSON_PrintUnformatted(pedido);
+    if (mensagem != NULL) {
+        write(socketMotorista, mensagem, strlen(mensagem));
+        free(mensagem);
+    }
+    cJSON_Delete(pedido);
+
+    char buffer_mensagem[32] = {0};
+    int bytes = read(socketMotorista, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+    if (bytes > 0) {
+        buffer_mensagem[bytes] = '\0';
+        if (strcmp(buffer_mensagem, "ROTA_CADASTRADA") == 0) {
+            printf("Rota cadastrada com sucesso!\n");
+        } else if (strcmp(buffer_mensagem, "ROTA_DESCONECTADA") == 0) {
+            printf("Os trechos nao formam uma rota conectada.\n");
+        } else if (strcmp(buffer_mensagem, "FALHA_CADASTRO_ROTA") == 0) {
+            printf("Um ou mais trechos nao tem caminho possivel no mapa.\n");
+        } else {
+            printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
+        }
+    }
+}
+
 void telaMenu(int socketMotorista, Motorista *motorista){
     char buffer_mensagem[18] = {0};
     int escolha = 0;
@@ -209,7 +299,8 @@ void telaMenu(int socketMotorista, Motorista *motorista){
         printf(" 2- Cadastrar Trechos\n");
         printf(" 3- Ver meus Trechos\n");
         printf(" 4- Cancelar Trecho\n");
-        printf(" 5- Voltar\n");
+        printf(" 5- Cadastrar Rota (varios trechos conectados)\n");
+        printf(" 6- Voltar\n");
         printf("====================================\n");
         printf("Escolha uma opcao: ");
         scanf("%d", &escolha);
@@ -222,7 +313,9 @@ void telaMenu(int socketMotorista, Motorista *motorista){
             listarTrechos(socketMotorista, motorista);
         } else if (escolha == 4) {
             cancelarTrecho(socketMotorista, motorista);
-        } else if (escolha == 5) {
+        } else if (escolha == 6) {
+            cadastrarRotaMotorista(socketMotorista, motorista);
+        } else if (escolha == 6) {
             sair = 1;
         } else {
             printf("Opcao invalida. Tente novamente.\n");
@@ -402,9 +495,14 @@ int main(){
     endereco_servidor.sin_family = AF_INET;
     endereco_servidor.sin_port = htons(PORT);
 
-    struct hostent *host = gethostbyname("localhost");
+    char ip_servidor[100];
+    
+    printf("Digite o IP do servidor: ");
+    scanf("%99s", ip_servidor);
+
+    struct hostent *host = gethostbyname(ip_servidor);
     if (host == NULL) {
-        perror("Erro ao resolver nome do host 'localhost'");
+        perror("Erro ao resolver nome do host");
         free(motorista);
         close(socketMotorista);
         exit(EXIT_FAILURE);

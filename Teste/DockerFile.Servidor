@@ -1,15 +1,20 @@
-# Dockerfile.servidor
-FROM gcc:13
+# Usar a imagem oficial do GCC para compilar código C
+FROM gcc:latest
 
+# Definir o diretório de trabalho dentro do container
 WORKDIR /app
 
+# Copiar todos os arquivos do diretório atual para o container
 COPY . .
 
-RUN mkdir -p dados trechosCadastrados
-RUN mkdir -p dados1 dados
+# Criar os diretórios necessários para evitar falhas de segmentação ao gravar arquivos
+RUN mkdir -p logs trechosCadastrados dados
 
-RUN gcc servidor.c grafomapa.c cJSON.c -o servidor_bin -lpthread
+# Compilar o servidor com as dependências necessárias (incluindo threads e cJSON)
+RUN gcc servidor.c cJSON.c grafomapa.c -o servidor_bin -pthread
 
+# Expor a porta utilizada pelo servidor
 EXPOSE 65432
 
+# Comando para iniciar o servidor
 CMD ["./servidor_bin"]
