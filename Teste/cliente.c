@@ -110,7 +110,7 @@ void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino,
 
         cJSON *respostaSelecionada = cJSON_CreateObject();
         cJSON_AddStringToObject(respostaSelecionada, "classe", "Cliente");
-        cJSON_AddStringToObject(respostaSelecionada, "acao", "selecionar_rota");
+        cJSON_AddStringToObject(respostaSelecionada, "acao", "selecionar_trecho");
         cJSON_AddNumberToObject(respostaSelecionada, "idSelecionado", idSelecionado);
         cJSON_AddStringToObject(respostaSelecionada, "emailCliente", cliente->email);
         cJSON_AddStringToObject(respostaSelecionada, "origem", origemEscolhida);
@@ -144,6 +144,7 @@ void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino,
 
     cJSON *respostaFinalizar = cJSON_CreateObject();
     cJSON_AddStringToObject(respostaFinalizar, "classe", "Cliente");
+    cJSON_AddStringToObject(respostaFinalizar, "email", cliente->email);
     cJSON_AddStringToObject(respostaFinalizar, "acao", "finalizar_rota");
     cJSON_AddItemToObject(respostaFinalizar, "rota", arrayRotas);
     cJSON_AddStringToObject(respostaFinalizar, "origemRota", origem);
@@ -296,7 +297,7 @@ void ver_caronas(int socketCliente, Cliente *cliente){
     cJSON_AddStringToObject(enviar_dados, "nome", cliente->nome);
     cJSON_AddStringToObject(enviar_dados, "email", cliente->email);
     cJSON_AddStringToObject(enviar_dados, "senha", cliente->senha);
-    cJSON_AddStringToObject(enviar_dados, "acao", "listar_reservas");
+    cJSON_AddStringToObject(enviar_dados, "acao", "listar_caronas");
 
     char *mensagem = cJSON_PrintUnformatted(enviar_dados);
     if (mensagem != NULL) {
@@ -360,7 +361,7 @@ void cancelar_carona(int socketCliente, Cliente *cliente){
     cJSON_AddStringToObject(enviar_dados, "nome", cliente->nome);
     cJSON_AddStringToObject(enviar_dados, "email", cliente->email);
     cJSON_AddStringToObject(enviar_dados, "senha", cliente->senha);
-    cJSON_AddStringToObject(enviar_dados, "acao", "listar_reservas");
+    cJSON_AddStringToObject(enviar_dados, "acao", "listar_caronas");
 
     char *mensagem = cJSON_PrintUnformatted(enviar_dados);
     if (mensagem != NULL) {
@@ -434,8 +435,6 @@ void cancelar_carona(int socketCliente, Cliente *cliente){
         buffer_mensagem[bytes] = '\0';
         if (strcmp(buffer_mensagem, "CARONA_CANCELADA") == 0) {
             printf("Carona cancelada com sucesso!\n");
-        } else if (strcmp(buffer_mensagem, "MOTORISTA_CANCELOU") == 0) {
-            printf("O motorista cancelou esta carona!\n");
         } else {
             printf("Carona nao cancelada! motivo: %s\n", buffer_mensagem);
         }
