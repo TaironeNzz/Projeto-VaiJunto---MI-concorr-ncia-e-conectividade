@@ -206,12 +206,12 @@ int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
             cJSON_AddStringToObject(trecho, "hora", hora);
             cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
             cJSON_AddNumberToObject(trecho, "preco", preco);
-            cJSON_AddItemToObject(trecho, "clientes", arrayClientes);
 
+            cJSON_AddItemToObject(trecho, "clientes", cJSON_Duplicate(arrayClientes, 1));
             char *saida = cJSON_PrintUnformatted(trecho);
             fprintf(arquivoTrechos, "%s\n", saida);
             free(saida);
-            //removi o deleteJson(trecho)
+            cJSON_Delete(trecho);
             idTrecho++;
             fflush(arquivoTrechos);
             pthread_mutex_unlock(&trechosMutex);
@@ -302,6 +302,65 @@ void loginMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
     pthread_mutex_unlock(&loginMotoristaMutex);
 }
 
+void cancelarTrechoMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos){
+    int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
+    char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
+    int trechoEncontrado = 0;
+
+    pthread_mutex_lock(&trechosMutex);
+
+    FILE *origem = fopen("trechosCadastrados/trechos.json", "r");
+    if (origem == NULL) {
+        perror("Erro ao abrir o arquivo");
+        pthread_mutex_unlock(&trechosMutex);
+        send(socketMotorista, "TRECHO_NAO_ENCONTRADO", 21, 0);
+        return;
+    }
+
+    FILE *temp = fopen("trechosCadastrados/trechos.tmp", "w");
+    if (temp == NULL) {
+        perror("Erro ao abrir arquivo temporario");
+        fclose(origem);
+        pthread_mutex_unlock(&trechosMutex);
+        send(socketMotorista, "TRECHO_NAO_ENCONTRADO", 21, 0);
+        return;
+    }
+
+    char linha[256];
+    while (fgets(linha, sizeof(linha), origem) != NULL) {
+        cJSON *trechoJson = cJSON_Parse(linha);
+        if (trechoJson != NULL) {
+            int id = cJSON_GetNumberValue(cJSON_GetObjectItem(trechoJson, "idTrecho"));
+            char *nomeMotoristaTrecho = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "nomeMotorista"));
+
+            if (id == idSelecionado && nomeMotorista != NULL && nomeMotoristaTrecho != NULL &&
+                strcmp(nomeMotorista, nomeMotoristaTrecho) == 0) {
+                trechoEncontrado = 1;
+            } else {
+                char *saida = cJSON_PrintUnformatted(trechoJson);
+                fprintf(temp, "%s\n", saida);
+                free(saida);
+            }
+            cJSON_Delete(trechoJson);
+        } else {
+            fputs(linha, temp);
+        }
+    }
+
+    fclose(origem);
+    fclose(temp);
+    remove("trechosCadastrados/trechos.json");
+    rename("trechosCadastrados/trechos.tmp", "trechosCadastrados/trechos.json");
+
+    pthread_mutex_unlock(&trechosMutex);
+
+    if (trechoEncontrado) {
+        send(socketMotorista, "TRECHO_CANCELADO", 16, 0);
+    } else {
+        send(socketMotorista, "TRECHO_NAO_ENCONTRADO", 21, 0);
+    }
+}
+
 void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
     char dadosLogin[256] = {0};
     char dadosTrechos[256] = {0};
@@ -333,6 +392,8 @@ void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
         cadastrarTrecho(jsonLogin, socketMotorista, arquivo2);
     } else if (strcmp(acao, "listar_trechos") == 0) {
         listar_trechos(jsonLogin, socketMotorista, arquivo2);
+    } else if (strcmp(acao, "cancelar_trecho") == 0) {
+    cancelarTrechoMotorista(jsonLogin, socketMotorista, arquivo2);
     } else {
         send(socketMotorista, "ACAO_DESCONHECIDA", 17, 0);
     }
@@ -442,7 +503,7 @@ void selecionar_carona(cJSON *jsonLogin, int socketCliente){
     }
 
     char linha[256];
-    cJSON *email = cJSON_GetObjectItem(jsonLogin, "emailCliente");
+    char *emailStr = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailCliente"));
     while (fgets(linha, sizeof(linha), origem) != NULL) {
         cJSON *trechoJson = cJSON_Parse(linha);
         if (trechoJson != NULL) {
@@ -465,14 +526,16 @@ void selecionar_carona(cJSON *jsonLogin, int socketCliente){
                     trechoEncontrado = 1;
                     reservouEsteAqui = 1;
                     cJSON_ReplaceItemInObject(trechoJson, "capacidade", cJSON_CreateNumber(capacidadeAtual - 1));
-                    cJSON_AddItemToArray(arrayClientes, email);
+                    if (emailStr != NULL) {
+                        cJSON_AddItemToArray(arrayClientes, cJSON_CreateString(emailStr));
+                    }
                 } else {
                     semAssento = 1;
                 }
             }
             char *saida = cJSON_PrintUnformatted(trechoJson);
             fprintf(temp, "%s\n", saida);
-            //removi o deleteJson(trechojson)
+            cJSON_Delete(trechoJson);
             free(saida);
         } else {
             fputs(linha, temp);
@@ -521,6 +584,7 @@ void selecionar_Rota(cJSON *jsonLogin, int socketCliente){
     }
 
     char linha[256];
+    char *emailStr = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailCliente"));
     while (fgets(linha, sizeof(linha), origem) != NULL) {
         cJSON *trechoJson = cJSON_Parse(linha);
         if (trechoJson != NULL) {
@@ -542,6 +606,10 @@ void selecionar_Rota(cJSON *jsonLogin, int socketCliente){
                     trechoEncontrado = 1;
                     reservouEsteAqui = 1;
                     cJSON_ReplaceItemInObject(trechoJson, "capacidade", cJSON_CreateNumber(capacidadeAtual - 1));
+                    cJSON *arrayClientes = cJSON_GetObjectItem(trechoJson, "clientes");
+                    if (emailStr != NULL && arrayClientes != NULL) {
+                        cJSON_AddItemToArray(arrayClientes, cJSON_CreateString(emailStr));
+                    }
                     retornoTrecho = cJSON_PrintUnformatted(trechoJson);
                 } else {
                     semAssento = 1;
@@ -753,8 +821,9 @@ void listar_reservas(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
 
 void cancelar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
     int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
-    int caronaRemovida = 0;
-    char *emailCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailCliente")); 
+    char *emailCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailCliente"));
+    int trechoEncontrado = 0;
+    int clienteEncontrado = 0;
 
     pthread_mutex_lock(&trechosMutex);
 
@@ -762,7 +831,7 @@ void cancelar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
     if (origem == NULL) {
         perror("Erro ao abrir o arquivo");
         pthread_mutex_unlock(&trechosMutex);
-        send(socketCliente, "ERRO_AO_CANCELAR_TRECHO", 23, 0);
+        send(socketCliente, "MOTORISTA_CANCELOU", 18, 0);
         return;
     }
 
@@ -771,7 +840,7 @@ void cancelar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
         perror("Erro ao abrir arquivo temporario");
         fclose(origem);
         pthread_mutex_unlock(&trechosMutex);
-        send(socketCliente, "ERRO_AO_CANCELAR_TRECHO", 23, 0);
+        send(socketCliente, "MOTORISTA_CANCELOU", 18, 0);
         return;
     }
 
@@ -780,22 +849,24 @@ void cancelar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
         cJSON *trechoJson = cJSON_Parse(linha);
         if (trechoJson != NULL) {
             int id = cJSON_GetNumberValue(cJSON_GetObjectItem(trechoJson, "idTrecho"));
-            cJSON *arrayClientes = cJSON_GetObjectItem(trechoJson, "clientes");
 
             if (id == idSelecionado) {
-                int total = cJSON_GetArraySize(arrayClientes);
-                caronaRemovida = 1;
-                int capacidadeAtual = cJSON_GetNumberValue(cJSON_GetObjectItem(trechoJson, "capacidade"));
-                cJSON_ReplaceItemInObject(trechoJson, "capacidade", cJSON_CreateNumber(capacidadeAtual + 1));
-                for (int i=0; i<total; i++){
+                trechoEncontrado = 1;
+                cJSON *arrayClientes = cJSON_GetObjectItem(trechoJson, "clientes");
+                int total = arrayClientes ? cJSON_GetArraySize(arrayClientes) : 0;
+
+                for (int i = 0; i < total; i++) {
                     char *email = cJSON_GetStringValue(cJSON_GetArrayItem(arrayClientes, i));
-                    if (email != NULL && emailCliente != NULL && strcmp(id, idSelecionado) == 0){
-                        //Falta remover o email do cliente desse array de clientes
-                        cJSON_ReplaceItemInArray(arrayClientes, )
+                    if (email != NULL && emailCliente != NULL && strcmp(email, emailCliente) == 0) {
+                        cJSON_DeleteItemFromArray(arrayClientes, i);
+                        clienteEncontrado = 1;
+                        int capacidadeAtual = cJSON_GetNumberValue(cJSON_GetObjectItem(trechoJson, "capacidade"));
+                        cJSON_ReplaceItemInObject(trechoJson, "capacidade", cJSON_CreateNumber(capacidadeAtual + 1));
+                        break;
                     }
                 }
-
             }
+
             char *saida = cJSON_PrintUnformatted(trechoJson);
             fprintf(temp, "%s\n", saida);
             free(saida);
@@ -812,13 +883,55 @@ void cancelar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
 
     pthread_mutex_unlock(&trechosMutex);
 
-    if (caronaRemovida) {
+    if (clienteEncontrado) {
         send(socketCliente, "CARONA_CANCELADA", 16, 0);
-    } else if (!caronaRemovida) {
-        send(socketCliente, "MOTORISTA_CANCELOU", 18, 0);
+    } else if (trechoEncontrado) {
+        send(socketCliente, "TRECHO_NAO_ENCONTRADO", 21, 0);
     } else {
-        send(socketCliente, "TRECHO_NAO_ENCONTRADO", 21, 0); 
+        send(socketCliente, "MOTORISTA_CANCELOU", 18, 0);
     }
+}
+
+void buscar_trechos_partida(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
+    char dadosTrechos[256] = {0};
+    pthread_mutex_lock(&trechosMutex);
+    rewind(arquivoTrechos);
+    cJSON *arrayResposta = cJSON_CreateArray();
+    char *origemBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origem"));
+
+    while (fgets(dadosTrechos, sizeof(dadosTrechos), arquivoTrechos) != NULL) {
+        cJSON *trechosJson = cJSON_Parse(dadosTrechos);
+        if (trechosJson != NULL) {
+            int id = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "idTrecho"));
+            char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "nomeMotorista"));
+            char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "origem"));
+            char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "destino"));
+            int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "capacidade"));
+            char *data = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "data"));
+            char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "hora"));
+            float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "preco"));
+
+            if (cidadeOrigem != NULL && origemBuscada != NULL &&
+                strcmp(cidadeOrigem, origemBuscada) == 0 && capacidade > 0) {
+                cJSON *item = cJSON_CreateObject();
+                cJSON_AddNumberToObject(item, "id", id);
+                cJSON_AddStringToObject(item, "nomeMotorista", nomeMotorista);
+                cJSON_AddStringToObject(item, "origem", cidadeOrigem);
+                cJSON_AddStringToObject(item, "destino", cidadeDestino);
+                cJSON_AddNumberToObject(item, "capacidade", capacidade);
+                cJSON_AddStringToObject(item, "data", data);
+                cJSON_AddStringToObject(item, "hora", hora);
+                cJSON_AddNumberToObject(item, "preco", preco);
+                cJSON_AddItemToArray(arrayResposta, item);
+            }
+        }
+        cJSON_Delete(trechosJson);
+    }
+    pthread_mutex_unlock(&trechosMutex);
+    char *resposta = cJSON_PrintUnformatted(arrayResposta);
+    send(socketCliente, resposta, strlen(resposta), 0);
+    free(resposta);
+    cJSON_Delete(arrayResposta);
 }
 
 void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
@@ -859,6 +972,8 @@ void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
         listar_reservas(jsonLogin, socketCliente, arquivoTrechos);
     } else if (strcmp(acao, "cancelar_carona") == 0) {
         cancelar_carona(jsonLogin, socketCliente, arquivoTrechos);
+    } else if (strcmp(acao, "buscar_trechos_partida") == 0) {
+        buscar_trechos_partida(jsonLogin, socketCliente, arquivoTrechos);
     } else {
         send(socketCliente, "ACAO_DESCONHECIDA", 17, 0);
     }

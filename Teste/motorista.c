@@ -163,6 +163,38 @@ void listarTrechos(int socketMotorista, Motorista *motorista){
     cJSON_Delete(arrayResposta);
 }
 
+void cancelarTrecho(int socketMotorista, Motorista *motorista){
+    listarTrechos(socketMotorista, motorista);
+
+    printf("Digite o ID do trecho que deseja cancelar (ou 00 para voltar): ");
+    int idSelecionado;
+    scanf("%d", &idSelecionado);
+    if (idSelecionado == 0) return;
+
+    cJSON *cancelar = cJSON_CreateObject();
+    cJSON_AddStringToObject(cancelar, "classe", "Motorista");
+    cJSON_AddStringToObject(cancelar, "acao", "cancelar_trecho");
+    cJSON_AddStringToObject(cancelar, "nome", motorista->nome);
+    cJSON_AddNumberToObject(cancelar, "idSelecionado", idSelecionado);
+    char *mensagem = cJSON_PrintUnformatted(cancelar);
+    if (mensagem != NULL) {
+        write(socketMotorista, mensagem, strlen(mensagem));
+        free(mensagem);
+    }
+    cJSON_Delete(cancelar);
+
+    char buffer_mensagem[32] = {0};
+    int bytes = read(socketMotorista, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+    if (bytes > 0) {
+        buffer_mensagem[bytes] = '\0';
+        if (strcmp(buffer_mensagem, "TRECHO_CANCELADO") == 0) {
+            printf("Trecho cancelado com sucesso!\n");
+        } else {
+            printf("Trecho nao encontrado.\n");
+        }
+    }
+}
+
 void telaMenu(int socketMotorista, Motorista *motorista){
     char buffer_mensagem[18] = {0};
     int escolha = 0;
@@ -176,7 +208,8 @@ void telaMenu(int socketMotorista, Motorista *motorista){
         printf(" 1- Cadastrar um Trecho\n");
         printf(" 2- Cadastrar Trechos\n");
         printf(" 3- Ver meus Trechos\n");
-        printf(" 4- Sair da Conta\n");
+        printf(" 4- Cancelar Trecho\n");
+        printf(" 5- Voltar\n");
         printf("====================================\n");
         printf("Escolha uma opcao: ");
         scanf("%d", &escolha);
@@ -188,6 +221,8 @@ void telaMenu(int socketMotorista, Motorista *motorista){
         } else if (escolha == 3) {
             listarTrechos(socketMotorista, motorista);
         } else if (escolha == 4) {
+            cancelarTrecho(socketMotorista, motorista);
+        } else if (escolha == 5) {
             sair = 1;
         } else {
             printf("Opcao invalida. Tente novamente.\n");
