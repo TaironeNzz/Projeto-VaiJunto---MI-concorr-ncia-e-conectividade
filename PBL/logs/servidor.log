@@ -1015,3 +1015,7 @@
 [2026-09-17 22:35:17] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
 [2026-09-17 22:35:20] [INFO] Dispositivo desconectado. Socket ID: 5
 [2026-09-17 22:35:25] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:47:02] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:47:14] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 22:47:16] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:47:20] [INFO] Dispositivo desconectado. Socket ID: 6
