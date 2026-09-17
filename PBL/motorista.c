@@ -173,10 +173,10 @@ void listarTrechos(int socketMotorista, Motorista *motorista){
 void cancelarTrecho(int socketMotorista, Motorista *motorista){
     listarTrechos(socketMotorista, motorista);
 
-    printf("Digite o ID do trecho que deseja cancelar (ou 00 para voltar): ");
+    printf("Digite o ID do trecho que deseja cancelar (ou -1 para voltar): ");
     int idSelecionado;
     scanf("%d", &idSelecionado);
-    if (idSelecionado == 00) return;
+    if (idSelecionado == -1) return;
 
     char *email = motorista->email;
     if (email == NULL){

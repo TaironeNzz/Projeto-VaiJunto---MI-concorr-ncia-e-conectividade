@@ -71,7 +71,7 @@ void encontrarID(){
         return;
     }
 
-    char linha[256];
+    char linha[4096];
     while (fgets(linha, sizeof(linha), arquivo) != NULL) {
         cJSON *trechoJson = cJSON_Parse(linha);
         if (trechoJson != NULL) {
@@ -123,7 +123,7 @@ void limparTrechosExpirados(void) {
         return;
     }
 
-    char linha[256];
+    char linha[4096];
     while (fgets(linha, sizeof(linha), origem) != NULL) {
         cJSON *trecho = cJSON_Parse(linha);
         if (trecho == NULL) continue;
@@ -157,7 +157,7 @@ void *rotinaLimpezaTrechos(void *arg) {
 }
 
 void cadastrarCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
-    char dadosLogin[256] = {0};
+    char dadosLogin[1024] = {0};
     int emailEncontrado = 0;
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
@@ -191,7 +191,7 @@ void cadastrarCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
 
 void cadastrarMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
     int emailEncontrado = 0;
-    char dadosLogin[256] = {0};
+    char dadosLogin[1024] = {0};
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
 
@@ -277,7 +277,7 @@ int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
 }
 
 void listar_trechos(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos){
-    char dadosTrechos[256] = {0};
+    char dadosTrechos[4096] = {0};
     pthread_mutex_lock(&trechosMutex);
     cJSON *arrayResposta = cJSON_CreateArray();
     rewind(arquivoTrechos);
@@ -322,7 +322,7 @@ void listar_trechos(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
 
 void loginMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
     int emailEncontrado = 0;
-    char dadosLogin[256] = {0};
+    char dadosLogin[1024] = {0};
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *senhaBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "senha"));
 
@@ -389,7 +389,7 @@ void cancelarTrechoMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquiv
         return;
     }
 
-    char linha[256];
+    char linha[4096];
     while (fgets(linha, sizeof(linha), origem) != NULL) {
         cJSON *trechoJson = cJSON_Parse(linha);
         if (trechoJson != NULL) {
@@ -562,7 +562,7 @@ void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
 
 void loginCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
     int emailEncontrado = 0;
-    char dadosLogin[256] = {0};
+    char dadosLogin[1024] = {0};
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *senhaBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "senha"));
 
@@ -592,7 +592,7 @@ void loginCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
 }
 
 void buscar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
-    char dadosTrechos[1024] = {0};
+    char dadosTrechos[4096] = {0};
     pthread_mutex_lock(&trechosMutex);
     if (arquivoTrechos == NULL) {
         perror("Erro ao abrir o arquivo");
@@ -665,7 +665,7 @@ void selecionar_carona(cJSON *jsonLogin, int socketCliente){
         return;
     }
 
-    char linha[256];
+    char linha[4096];
     char *emailStr = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailCliente"));
     while (fgets(linha, sizeof(linha), origem) != NULL) {
         cJSON *trechoJson = cJSON_Parse(linha);
@@ -747,7 +747,7 @@ void AddTrechoNaRota(cJSON *jsonLogin, int socketCliente){
         return;
     }
 
-    char linha[256];
+    char linha[4096];
     char *emailStr = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailCliente"));
     while (fgets(linha, sizeof(linha), origem) != NULL) {
         cJSON *trechoJson = cJSON_Parse(linha);
@@ -824,7 +824,7 @@ int cancelarReservaInterna(int idSelecionado, char *emailCliente){
         return 0;
     }
 
-    char linha[256];
+    char linha[4096];
     while (fgets(linha, sizeof(linha), origem) != NULL) {
         cJSON *trechoJson = cJSON_Parse(linha);
         if (trechoJson != NULL) {
@@ -925,7 +925,7 @@ void finalizar_Rota(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
 }
 
 void listar_reservas(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
-    char dadosTrechos[256] = {0};
+    char dadosTrechos[4096] = {0};
     pthread_mutex_lock(&trechosMutex);
     cJSON *arrayResposta = cJSON_CreateArray();
     rewind(arquivoTrechos);
@@ -994,7 +994,7 @@ void cancelar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
 }
 
 void buscar_trechos_partida(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
-    char dadosTrechos[256] = {0};
+    char dadosTrechos[4096] = {0};
     pthread_mutex_lock(&trechosMutex);
     rewind(arquivoTrechos);
     cJSON *arrayResposta = cJSON_CreateArray();
@@ -1036,8 +1036,8 @@ void buscar_trechos_partida(cJSON *jsonLogin, int socketCliente, FILE *arquivoTr
 }
 
 void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
-    char dadosLogin[256] = {0};
-    char dadosTrechos[256] = {0};
+    char dadosLogin[1024] = {0};
+    char dadosTrechos[4096] = {0};
     int emailEncontrado = 0;
     FILE *arquivo = fopen("dados/loginCliente.json", "a+");
     if (arquivo == NULL) {
@@ -1084,23 +1084,42 @@ void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
 void *rotinaTratamento(void *arg){
     int socket = *(int*)arg;
     free(arg);
-    char buffer_mensagem [256] = {0};
+    char buffer_mensagem [8192];
     cJSON *json = NULL;
+    int desconectar = 0;
+
     while (1){
-        ssize_t bytes_lidos = read(socket, buffer_mensagem, 255);
+        memset(buffer_mensagem, 0, sizeof(buffer_mensagem));
+        int total = 0;
+        json = NULL;
 
-        if (bytes_lidos <= 0) {
+        /* Acumula os bytes recebidos ate conseguir parsear um JSON completo.
+         * Uma unica mensagem pode chegar dividida em varios pacotes TCP
+         * (especialmente entre maquinas diferentes), e uma unica chamada
+         * a read() nao garante receber a mensagem inteira de uma vez. */
+        while (json == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
+            ssize_t bytes_lidos = read(socket, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
+            if (bytes_lidos <= 0) {
+                desconectar = 1;
+                break;
+            }
+            total += bytes_lidos;
+            buffer_mensagem[total] = '\0';
+
+            if (strcmp(buffer_mensagem, "DESCONECTADO") == 0) {
+                desconectar = 1;
+                break;
+            }
+
+            json = cJSON_Parse(buffer_mensagem);
+        }
+
+        if (desconectar) {
             break;
         }
-        buffer_mensagem[bytes_lidos] = '\0';
 
-        if (strcmp(buffer_mensagem, "DESCONECTADO") == 0) {
-            break;
-        }
-            
-        json = cJSON_Parse(buffer_mensagem);
         if (json == NULL) {
-            log_mensagem(LOG_ERROR, "Erro ao analisar JSON do socket %d: %s", socket, cJSON_GetErrorPtr());
+            log_mensagem(LOG_ERROR, "Erro ao analisar JSON do socket %d: mensagem invalida ou excede o buffer (%d bytes recebidos)", socket, total);
             close(socket);
             return NULL;
         }
@@ -1220,4 +1239,4 @@ int main(){
     close(socketServidor);
     pthread_mutex_destroy(&logMutex);
     return 0;
-}   
+}

@@ -1,0 +1,1017 @@
+[2026-09-17 17:13:43] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 17:19:45] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 17:41:19] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 17:51:35] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 17:52:01] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 17:52:30] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 17:54:21] [ERROR] Erro ao analisar JSON do socket 4: 17/09/20
+[2026-09-17 17:54:50] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 19:14:18] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 19:17:42] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 19:18:41] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 19:21:18] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 19:22:05] [WARN] Falha de autenticação para o email: lucio@gmail.com
+[2026-09-17 19:22:13] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 19:22:21] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:22:49] [WARN] Falha de autenticação para o email: gabriel@gmail.com
+[2026-09-17 19:22:55] [INFO] Cliente logado - Nome: Gabriel | Email: gabriel@gmail.com
+[2026-09-17 19:24:52] [INFO] Trecho ID 1 cadastrado por Lucio (Santa_Barbara -> Feira_de_Santana)
+[2026-09-17 19:25:06] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:28:10] [INFO] Reserva realizada - Cliente: gabriel@gmail.com | Trecho ID: 0
+[2026-09-17 19:28:35] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:29:13] [INFO] Reserva realizada - Cliente: gabriel@gmail.com | Trecho ID: 0
+[2026-09-17 19:29:42] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:29:50] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:30:05] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:30:08] [INFO] Reserva cancelada pelo cliente - Cliente: gabriel@gmail.com | ID Trecho: 0
+[2026-09-17 19:30:18] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:30:24] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:30:38] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:30:46] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:30:54] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:30:58] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:31:23] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 19:31:29] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 19:56:03] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 19:57:43] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 19:58:45] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 19:58:48] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 19:59:02] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 19:59:08] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:59:27] [INFO] Cliente logado - Nome: Gabriel | Email: gabriel@gmail.com
+[2026-09-17 19:59:30] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:59:33] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:59:36] [INFO] Reserva cancelada pelo cliente - Cliente: gabriel@gmail.com | ID Trecho: 0
+[2026-09-17 19:59:46] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 20:00:40] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:00:43] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 20:01:24] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:01:32] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 20:02:02] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:02:05] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 20:02:38] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:02:41] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 20:03:41] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:05:12] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 20:05:34] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 20:05:46] [INFO] Cliente logado - Nome: Gabriel | Email: gabriel@gmail.com
+[2026-09-17 20:06:20] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:06:24] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 20:06:29] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 20:06:32] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:06:37] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:29:10] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:29:10] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:29:10] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 21:29:11] [INFO] Novo cliente cadastrado - Nome: ClienteConcorrente0 | Email: corrida_cadastro_1789680550_54648_0@teste.com
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 18
+[2026-09-17 21:29:11] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:29:11] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:29:11] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:29:11] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:29:11] [INFO] Dispositivo desconectado. Socket ID: 18
+[2026-09-17 21:29:11] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:29:11] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 21:29:11] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaTesteReserva | Email: motorista_reserva_1789680551_54648_1@teste.com
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 10: MotoristaTesteReserv
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc0 | Email: motorista_idconc_1789680551_54648_2@teste.com
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc1 | Email: motorista_idconc_1789680551_54648_3@teste.com
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc2 | Email: motorista_idconc_1789680551_54648_4@teste.com
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc3 | Email: motorista_idconc_1789680551_54648_5@teste.com
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc4 | Email: motorista_idconc_1789680551_54648_6@teste.com
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc5 | Email: motorista_idconc_1789680551_54648_7@teste.com
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc6 | Email: motorista_idconc_1789680551_54648_8@teste.com
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 15
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc7 | Email: motorista_idconc_1789680551_54648_9@teste.com
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 16
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc8 | Email: motorista_idconc_1789680551_54648_10@teste.com
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 12
+[2026-09-17 21:29:11] [INFO] Novo dispositivo conectado. Socket ID: 14
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc10 | Email: motorista_idconc_1789680551_54648_12@teste.com
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc9 | Email: motorista_idconc_1789680551_54648_11@teste.com
+[2026-09-17 21:29:11] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc11 | Email: motorista_idconc_1789680551_54648_13@teste.com
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 4: cli
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 7: cli
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 14: c
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 12: cl
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 5: cli
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 15: cl
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 11: cli
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 10: cli
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 16: c
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 6: cli
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 8: cli
+[2026-09-17 21:29:11] [ERROR] Erro ao analisar JSON do socket 9: cli
+[2026-09-17 21:51:20] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:51:29] [INFO] Novo cliente cadastrado - Nome: ClienteConcorrente0 | Email: corrida_cadastro_1789681889_58870_0@teste.com
+[2026-09-17 21:51:29] [INFO] Novo cliente cadastrado - Nome: ClienteConcorrente5 | Email: corrida_cadastro_1789681889_58870_0@teste.com
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaTesteReserva | Email: motorista_reserva_1789681889_58870_1@teste.com
+[2026-09-17 21:51:29] [INFO] Trecho ID 1 cadastrado por MotoristaTesteReserva (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_reserva_1789681889_58870_1@teste.com
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:51:29] [INFO] Reserva realizada - Cliente: cliente_reserva_1789681889_58870_3@teste.com | Trecho ID: 0
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:51:29] [INFO] Reserva realizada - Cliente: cliente_reserva_1789681889_58870_6@teste.com | Trecho ID: 0
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:51:29] [INFO] Reserva realizada - Cliente: cliente_reserva_1789681889_58870_2@teste.com | Trecho ID: 0
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:51:29] [INFO] Reserva cancelada pelo cliente - Cliente: cliente_reserva_1789681889_58870_2@teste.com | ID Trecho: 0
+[2026-09-17 21:51:29] [WARN] Falha ao cancelar reserva - Cliente: cliente_reserva_1789681889_58870_2@teste.com | ID Trecho: 0
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc2 | Email: motorista_idconc_1789681889_58870_14@teste.com
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc1 | Email: motorista_idconc_1789681889_58870_13@teste.com
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc3 | Email: motorista_idconc_1789681889_58870_15@teste.com
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc0 | Email: motorista_idconc_1789681889_58870_12@teste.com
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc4 | Email: motorista_idconc_1789681889_58870_16@teste.com
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc5 | Email: motorista_idconc_1789681889_58870_17@teste.com
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc7 | Email: motorista_idconc_1789681889_58870_19@teste.com
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 14
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc6 | Email: motorista_idconc_1789681889_58870_18@teste.com
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 15
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 18
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc9 | Email: motorista_idconc_1789681889_58870_21@teste.com
+[2026-09-17 21:51:29] [INFO] Novo dispositivo conectado. Socket ID: 21
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc8 | Email: motorista_idconc_1789681889_58870_20@teste.com
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc10 | Email: motorista_idconc_1789681889_58870_22@teste.com
+[2026-09-17 21:51:29] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc11 | Email: motorista_idconc_1789681889_58870_23@teste.com
+[2026-09-17 21:51:29] [INFO] Trecho ID 2 cadastrado por MotoristaIdConc4 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Trecho ID 3 cadastrado por MotoristaIdConc0 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Trecho ID 5 cadastrado por MotoristaIdConc1 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Trecho ID 8 cadastrado por MotoristaIdConc2 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Trecho ID 6 cadastrado por MotoristaIdConc5 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Trecho ID 7 cadastrado por MotoristaIdConc7 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Trecho ID 4 cadastrado por MotoristaIdConc3 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Trecho ID 9 cadastrado por MotoristaIdConc8 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Trecho ID 10 cadastrado por MotoristaIdConc11 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Trecho ID 11 cadastrado por MotoristaIdConc9 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Trecho ID 12 cadastrado por MotoristaIdConc10 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789681889_58870_16@teste.com
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789681889_58870_21@teste.com
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789681889_58870_14@teste.com
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789681889_58870_23@teste.com
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789681889_58870_17@teste.com
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789681889_58870_15@teste.com
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 21
+[2026-09-17 21:51:29] [INFO] Trecho ID 13 cadastrado por MotoristaIdConc6 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 14
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789681889_58870_20@teste.com
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789681889_58870_13@teste.com
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 15
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789681889_58870_19@teste.com
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789681889_58870_22@teste.com
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789681889_58870_12@teste.com
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 21:51:29] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789681889_58870_18@teste.com
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 18
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:51:29] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 16
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:54:34] [INFO] Novo cliente cadastrado - Nome: ClienteConcorrente1 | Email: corrida_cadastro_1789682074_59488_0@teste.com
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 13
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 16
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 13
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaTesteReserva | Email: motorista_reserva_1789682074_59488_1@teste.com
+[2026-09-17 21:54:34] [INFO] Trecho ID 14 cadastrado por MotoristaTesteReserva (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_reserva_1789682074_59488_1@teste.com
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:54:34] [INFO] Reserva realizada - Cliente: cliente_reserva_1789682074_59488_2@teste.com | Trecho ID: 13
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 19
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 13
+[2026-09-17 21:54:34] [INFO] Reserva realizada - Cliente: cliente_reserva_1789682074_59488_7@teste.com | Trecho ID: 13
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 19
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 20
+[2026-09-17 21:54:34] [INFO] Reserva realizada - Cliente: cliente_reserva_1789682074_59488_4@teste.com | Trecho ID: 13
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 12
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 14
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 14
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 20
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 12
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 13
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:54:34] [INFO] Reserva cancelada pelo cliente - Cliente: cliente_reserva_1789682074_59488_2@teste.com | ID Trecho: 13
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 21:54:34] [WARN] Falha ao cancelar reserva - Cliente: cliente_reserva_1789682074_59488_2@teste.com | ID Trecho: 13
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc0 | Email: motorista_idconc_1789682074_59488_12@teste.com
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc1 | Email: motorista_idconc_1789682074_59488_13@teste.com
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc2 | Email: motorista_idconc_1789682074_59488_14@teste.com
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc3 | Email: motorista_idconc_1789682074_59488_15@teste.com
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc6 | Email: motorista_idconc_1789682074_59488_18@teste.com
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc4 | Email: motorista_idconc_1789682074_59488_16@teste.com
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 13
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc5 | Email: motorista_idconc_1789682074_59488_17@teste.com
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc7 | Email: motorista_idconc_1789682074_59488_19@teste.com
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 16
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 12
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc9 | Email: motorista_idconc_1789682074_59488_21@teste.com
+[2026-09-17 21:54:34] [INFO] Novo dispositivo conectado. Socket ID: 14
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc8 | Email: motorista_idconc_1789682074_59488_20@teste.com
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc10 | Email: motorista_idconc_1789682074_59488_22@teste.com
+[2026-09-17 21:54:34] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc11 | Email: motorista_idconc_1789682074_59488_23@teste.com
+[2026-09-17 21:54:34] [INFO] Trecho ID 15 cadastrado por MotoristaIdConc10 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Trecho ID 16 cadastrado por MotoristaIdConc8 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Trecho ID 17 cadastrado por MotoristaIdConc9 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Trecho ID 18 cadastrado por MotoristaIdConc1 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Trecho ID 20 cadastrado por MotoristaIdConc7 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Trecho ID 21 cadastrado por MotoristaIdConc2 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Trecho ID 23 cadastrado por MotoristaIdConc0 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Trecho ID 22 cadastrado por MotoristaIdConc6 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Trecho ID 24 cadastrado por MotoristaIdConc3 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Trecho ID 19 cadastrado por MotoristaIdConc11 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682074_59488_21@teste.com
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682074_59488_18@teste.com
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682074_59488_14@teste.com
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:54:34] [INFO] Trecho ID 25 cadastrado por MotoristaIdConc5 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682074_59488_17@teste.com
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682074_59488_19@teste.com
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 13
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682074_59488_22@teste.com
+[2026-09-17 21:54:34] [INFO] Trecho ID 26 cadastrado por MotoristaIdConc4 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682074_59488_13@teste.com
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 12
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682074_59488_23@teste.com
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682074_59488_20@teste.com
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682074_59488_12@teste.com
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 14
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 16
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682074_59488_15@teste.com
+[2026-09-17 21:54:34] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682074_59488_16@teste.com
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:54:34] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 18
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:54:57] [INFO] Novo cliente cadastrado - Nome: ClienteConcorrente6 | Email: corrida_cadastro_1789682097_59616_0@teste.com
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 18
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 13
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 13
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaTesteReserva | Email: motorista_reserva_1789682097_59616_1@teste.com
+[2026-09-17 21:54:57] [INFO] Trecho ID 27 cadastrado por MotoristaTesteReserva (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_reserva_1789682097_59616_1@teste.com
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 21:54:57] [INFO] Reserva realizada - Cliente: cliente_reserva_1789682097_59616_2@teste.com | Trecho ID: 26
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 14
+[2026-09-17 21:54:57] [INFO] Reserva realizada - Cliente: cliente_reserva_1789682097_59616_3@teste.com | Trecho ID: 26
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:54:57] [INFO] Reserva realizada - Cliente: cliente_reserva_1789682097_59616_4@teste.com | Trecho ID: 26
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 14
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 17
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 17
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:54:57] [INFO] Reserva cancelada pelo cliente - Cliente: cliente_reserva_1789682097_59616_2@teste.com | ID Trecho: 26
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 21:54:57] [WARN] Falha ao cancelar reserva - Cliente: cliente_reserva_1789682097_59616_2@teste.com | ID Trecho: 26
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc0 | Email: motorista_idconc_1789682097_59616_12@teste.com
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc4 | Email: motorista_idconc_1789682097_59616_16@teste.com
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc2 | Email: motorista_idconc_1789682097_59616_14@teste.com
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc6 | Email: motorista_idconc_1789682097_59616_18@teste.com
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 15
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 18
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc3 | Email: motorista_idconc_1789682097_59616_15@teste.com
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 13
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc10 | Email: motorista_idconc_1789682097_59616_22@teste.com
+[2026-09-17 21:54:57] [INFO] Novo dispositivo conectado. Socket ID: 14
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc11 | Email: motorista_idconc_1789682097_59616_23@teste.com
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc1 | Email: motorista_idconc_1789682097_59616_13@teste.com
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc9 | Email: motorista_idconc_1789682097_59616_21@teste.com
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc7 | Email: motorista_idconc_1789682097_59616_19@teste.com
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc8 | Email: motorista_idconc_1789682097_59616_20@teste.com
+[2026-09-17 21:54:57] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc5 | Email: motorista_idconc_1789682097_59616_17@teste.com
+[2026-09-17 21:54:57] [INFO] Trecho ID 29 cadastrado por MotoristaIdConc6 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Trecho ID 31 cadastrado por MotoristaIdConc0 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Trecho ID 29 cadastrado por MotoristaIdConc3 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Trecho ID 34 cadastrado por MotoristaIdConc4 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Trecho ID 32 cadastrado por MotoristaIdConc8 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Trecho ID 36 cadastrado por MotoristaIdConc2 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Trecho ID 31 cadastrado por MotoristaIdConc1 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Trecho ID 35 cadastrado por MotoristaIdConc11 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682097_59616_18@teste.com
+[2026-09-17 21:54:57] [INFO] Trecho ID 33 cadastrado por MotoristaIdConc9 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682097_59616_13@teste.com
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:54:57] [INFO] Trecho ID 37 cadastrado por MotoristaIdConc5 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 15
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682097_59616_12@teste.com
+[2026-09-17 21:54:57] [INFO] Trecho ID 38 cadastrado por MotoristaIdConc7 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682097_59616_16@teste.com
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682097_59616_20@teste.com
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682097_59616_15@teste.com
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682097_59616_14@teste.com
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:54:57] [INFO] Trecho ID 39 cadastrado por MotoristaIdConc10 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682097_59616_23@teste.com
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682097_59616_21@teste.com
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 13
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682097_59616_17@teste.com
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 18
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682097_59616_19@teste.com
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 14
+[2026-09-17 21:54:57] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682097_59616_22@teste.com
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:54:57] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 26
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:55:07] [INFO] Novo cliente cadastrado - Nome: ClienteConcorrente0 | Email: corrida_cadastro_1789682107_59696_0@teste.com
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 26
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaTesteReserva | Email: motorista_reserva_1789682107_59696_1@teste.com
+[2026-09-17 21:55:07] [INFO] Trecho ID 40 cadastrado por MotoristaTesteReserva (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_reserva_1789682107_59696_1@teste.com
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 21:55:07] [INFO] Reserva realizada - Cliente: cliente_reserva_1789682107_59696_2@teste.com | Trecho ID: 39
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 21:55:07] [INFO] Reserva realizada - Cliente: cliente_reserva_1789682107_59696_5@teste.com | Trecho ID: 39
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Reserva realizada - Cliente: cliente_reserva_1789682107_59696_8@teste.com | Trecho ID: 39
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 14
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 14
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Reserva cancelada pelo cliente - Cliente: cliente_reserva_1789682107_59696_2@teste.com | ID Trecho: 39
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 21:55:07] [WARN] Falha ao cancelar reserva - Cliente: cliente_reserva_1789682107_59696_2@teste.com | ID Trecho: 39
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc1 | Email: motorista_idconc_1789682107_59696_13@teste.com
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc2 | Email: motorista_idconc_1789682107_59696_14@teste.com
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc0 | Email: motorista_idconc_1789682107_59696_12@teste.com
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc5 | Email: motorista_idconc_1789682107_59696_17@teste.com
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 14
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc8 | Email: motorista_idconc_1789682107_59696_20@teste.com
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc6 | Email: motorista_idconc_1789682107_59696_18@teste.com
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc4 | Email: motorista_idconc_1789682107_59696_16@teste.com
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 12
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 18
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc7 | Email: motorista_idconc_1789682107_59696_19@teste.com
+[2026-09-17 21:55:07] [INFO] Novo dispositivo conectado. Socket ID: 20
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc3 | Email: motorista_idconc_1789682107_59696_15@teste.com
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc9 | Email: motorista_idconc_1789682107_59696_21@teste.com
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc10 | Email: motorista_idconc_1789682107_59696_22@teste.com
+[2026-09-17 21:55:07] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc11 | Email: motorista_idconc_1789682107_59696_23@teste.com
+[2026-09-17 21:55:07] [INFO] Trecho ID 41 cadastrado por MotoristaIdConc2 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Trecho ID 42 cadastrado por MotoristaIdConc8 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Trecho ID 43 cadastrado por MotoristaIdConc3 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Trecho ID 44 cadastrado por MotoristaIdConc0 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Trecho ID 46 cadastrado por MotoristaIdConc9 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Trecho ID 45 cadastrado por MotoristaIdConc1 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Trecho ID 47 cadastrado por MotoristaIdConc6 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Trecho ID 49 cadastrado por MotoristaIdConc7 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Trecho ID 48 cadastrado por MotoristaIdConc10 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Trecho ID 50 cadastrado por MotoristaIdConc11 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682107_59696_21@teste.com
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682107_59696_15@teste.com
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 12
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682107_59696_14@teste.com
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682107_59696_12@teste.com
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682107_59696_20@teste.com
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:55:07] [INFO] Trecho ID 51 cadastrado por MotoristaIdConc5 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682107_59696_13@teste.com
+[2026-09-17 21:55:07] [INFO] Trecho ID 52 cadastrado por MotoristaIdConc4 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682107_59696_22@teste.com
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682107_59696_23@teste.com
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 18
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682107_59696_18@teste.com
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 20
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682107_59696_19@teste.com
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682107_59696_16@teste.com
+[2026-09-17 21:55:07] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682107_59696_17@teste.com
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 14
+[2026-09-17 21:55:07] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 15
+[2026-09-17 21:59:09] [INFO] Novo motorista cadastrado - Nome: MotT5 | Email: mot_t5_1789682349_60570_0@teste.com
+[2026-09-17 21:59:09] [INFO] Trecho ID 53 cadastrado por MotT5 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:59:09] [INFO] Busca de trechos feito pelo motorista: mot_t5_1789682349_60570_0@teste.com
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 15
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:59:09] [INFO] Reserva realizada - Cliente: cli_t5_1789682349_60570_1@teste.com | Trecho ID: 52
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:59:09] [INFO] Reserva realizada - Cliente: cli_t5_1789682349_60570_1@teste.com | Trecho ID: 52
+[2026-09-17 21:59:09] [INFO] Reserva realizada - Cliente: cli_t5_1789682349_60570_1@teste.com | Trecho ID: 52
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:59:09] [INFO] Reserva realizada - Cliente: cli_t5_1789682349_60570_1@teste.com | Trecho ID: 52
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:59:09] [INFO] Reserva realizada - Cliente: cli_t5_1789682349_60570_1@teste.com | Trecho ID: 52
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:59:09] [INFO] Reserva realizada - Cliente: cli_t5_1789682349_60570_1@teste.com | Trecho ID: 52
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:59:09] [INFO] Trecho ID 55 cadastrado por MotEscritor (Feira_de_Santana -> Salvador)
+[2026-09-17 21:59:09] [INFO] Trecho ID 55 cadastrado por MotEscritor (Feira_de_Santana -> Salvador)
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:59:09] [INFO] Trecho ID 56 cadastrado por MotEscritor (Feira_de_Santana -> Salvador)
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:59:09] [INFO] Trecho ID 57 cadastrado por MotEscritor (Feira_de_Santana -> Salvador)
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 21:59:09] [INFO] Novo motorista cadastrado - Nome: MotT7 | Email: mot_t7_1789682349_60570_10@teste.com
+[2026-09-17 21:59:09] [INFO] Trecho ID 58 cadastrado por MotT7 (Feira_de_Santana -> Salvador)
+[2026-09-17 21:59:09] [INFO] Busca de trechos feito pelo motorista: mot_t7_1789682349_60570_10@teste.com
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 21:59:09] [INFO] Reserva realizada - Cliente: cli_t7_1789682349_60570_11@teste.com | Trecho ID: 57
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 21:59:09] [INFO] Novo dispositivo conectado. Socket ID: 12
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 21:59:09] [INFO] Dispositivo desconectado. Socket ID: 12
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 22
+[2026-09-17 22:00:04] [INFO] Novo motorista cadastrado - Nome: MotT5 | Email: mot_t5_1789682404_60764_0@teste.com
+[2026-09-17 22:00:04] [INFO] Trecho ID 59 cadastrado por MotT5 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:00:04] [INFO] Busca de trechos feito pelo motorista: mot_t5_1789682404_60764_0@teste.com
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 22
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 22:00:04] [INFO] Reserva realizada - Cliente: cli_t5_1789682404_60764_1@teste.com | Trecho ID: 58
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 17
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:00:04] [INFO] Reserva realizada - Cliente: cli_t5_1789682404_60764_1@teste.com | Trecho ID: 58
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:00:04] [INFO] Reserva realizada - Cliente: cli_t5_1789682404_60764_1@teste.com | Trecho ID: 58
+[2026-09-17 22:00:04] [INFO] Reserva realizada - Cliente: cli_t5_1789682404_60764_1@teste.com | Trecho ID: 58
+[2026-09-17 22:00:04] [INFO] Reserva realizada - Cliente: cli_t5_1789682404_60764_1@teste.com | Trecho ID: 58
+[2026-09-17 22:00:04] [INFO] Reserva realizada - Cliente: cli_t5_1789682404_60764_1@teste.com | Trecho ID: 58
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 17
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:00:04] [INFO] Trecho ID 60 cadastrado por MotEscritor (Feira_de_Santana -> Salvador)
+[2026-09-17 22:00:04] [INFO] Trecho ID 61 cadastrado por MotEscritor (Feira_de_Santana -> Salvador)
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 22:00:04] [INFO] Trecho ID 62 cadastrado por MotEscritor (Feira_de_Santana -> Salvador)
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:00:04] [INFO] Trecho ID 63 cadastrado por MotEscritor (Feira_de_Santana -> Salvador)
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:00:04] [INFO] Novo motorista cadastrado - Nome: MotT7 | Email: mot_t7_1789682404_60764_10@teste.com
+[2026-09-17 22:00:04] [INFO] Trecho ID 64 cadastrado por MotT7 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:00:04] [INFO] Busca de trechos feito pelo motorista: mot_t7_1789682404_60764_10@teste.com
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 12
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 17
+[2026-09-17 22:00:04] [INFO] Reserva realizada - Cliente: cli_t7_1789682404_60764_11@teste.com | Trecho ID: 63
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:00:04] [INFO] Novo dispositivo conectado. Socket ID: 13
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 12
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 13
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 17
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 22:00:04] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 22:00:16] [INFO] Novo motorista cadastrado - Nome: MotT5 | Email: mot_t5_1789682416_60846_0@teste.com
+[2026-09-17 22:00:16] [INFO] Trecho ID 65 cadastrado por MotT5 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:00:16] [INFO] Busca de trechos feito pelo motorista: mot_t5_1789682416_60846_0@teste.com
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 22:00:16] [INFO] Reserva realizada - Cliente: cli_t5_1789682416_60846_1@teste.com | Trecho ID: 64
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 15
+[2026-09-17 22:00:16] [INFO] Reserva realizada - Cliente: cli_t5_1789682416_60846_1@teste.com | Trecho ID: 64
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 22:00:16] [INFO] Reserva realizada - Cliente: cli_t5_1789682416_60846_1@teste.com | Trecho ID: 64
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:00:16] [INFO] Reserva realizada - Cliente: cli_t5_1789682416_60846_1@teste.com | Trecho ID: 64
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 22:00:16] [INFO] Reserva realizada - Cliente: cli_t5_1789682416_60846_1@teste.com | Trecho ID: 64
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:00:16] [INFO] Reserva realizada - Cliente: cli_t5_1789682416_60846_1@teste.com | Trecho ID: 64
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 15
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 19
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:00:16] [INFO] Trecho ID 66 cadastrado por MotEscritor (Feira_de_Santana -> Salvador)
+[2026-09-17 22:00:16] [INFO] Trecho ID 67 cadastrado por MotEscritor (Feira_de_Santana -> Salvador)
+[2026-09-17 22:00:16] [INFO] Trecho ID 68 cadastrado por MotEscritor (Feira_de_Santana -> Salvador)
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 19
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:00:16] [INFO] Trecho ID 69 cadastrado por MotEscritor (Feira_de_Santana -> Salvador)
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:00:16] [INFO] Novo motorista cadastrado - Nome: MotT7 | Email: mot_t7_1789682416_60846_10@teste.com
+[2026-09-17 22:00:16] [INFO] Trecho ID 70 cadastrado por MotT7 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:00:16] [INFO] Busca de trechos feito pelo motorista: mot_t7_1789682416_60846_10@teste.com
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 12
+[2026-09-17 22:00:16] [INFO] Reserva realizada - Cliente: cli_t7_1789682416_60846_11@teste.com | Trecho ID: 69
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 20
+[2026-09-17 22:00:16] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 12
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 20
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 22:00:16] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 24
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 22:02:31] [WARN] Falha de autenticação para o email: user_t8_1789682551_61337_0@teste.com
+[2026-09-17 22:02:31] [INFO] Novo cliente cadastrado - Nome: UsuarioT8 | Email: user_t8_1789682551_61337_0@teste.com
+[2026-09-17 22:02:31] [INFO] Dispositivo desconectado. Socket ID: 24
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 22:02:31] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:02:31] [INFO] Cliente logado - Nome: UsuarioT8 | Email: user_t8_1789682551_61337_0@teste.com
+[2026-09-17 22:02:31] [INFO] Cliente logado - Nome: UsuarioT8 | Email: user_t8_1789682551_61337_0@teste.com
+[2026-09-17 22:02:31] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:02:31] [INFO] Cliente logado - Nome: UsuarioT8 | Email: user_t8_1789682551_61337_0@teste.com
+[2026-09-17 22:02:31] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 22:02:31] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:02:31] [INFO] Cliente logado - Nome: UsuarioT8 | Email: user_t8_1789682551_61337_0@teste.com
+[2026-09-17 22:02:31] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 22:02:31] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 22:02:31] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:02:31] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 22:02:31] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 22:02:31] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 22:03:05] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 22:03:05] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:03:05] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:03:05] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 22:03:11] [WARN] Falha de autenticação para o email: user_t8_1789682591_61476_0@teste.com
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 12
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 17
+[2026-09-17 22:03:11] [INFO] Novo cliente cadastrado - Nome: UsuarioT8 | Email: user_t8_1789682591_61476_0@teste.com
+[2026-09-17 22:03:11] [WARN] Falha de autenticação para o email: user_t8_1789682591_61476_0@teste.com
+[2026-09-17 22:03:11] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:03:11] [INFO] Cliente logado - Nome: UsuarioT8 | Email: user_t8_1789682591_61476_0@teste.com
+[2026-09-17 22:03:11] [INFO] Cliente logado - Nome: UsuarioT8 | Email: user_t8_1789682591_61476_0@teste.com
+[2026-09-17 22:03:11] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 22:03:11] [INFO] Dispositivo desconectado. Socket ID: 12
+[2026-09-17 22:03:11] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:03:11] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 22:03:11] [INFO] Cliente logado - Nome: UsuarioT8 | Email: user_t8_1789682591_61476_0@teste.com
+[2026-09-17 22:03:11] [INFO] Dispositivo desconectado. Socket ID: 17
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 20
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 10
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 22:03:11] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 22:03:11] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 22:03:11] [INFO] Dispositivo desconectado. Socket ID: 10
+[2026-09-17 22:03:11] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:03:11] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 22:03:13] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 22:03:13] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:03:13] [INFO] Dispositivo desconectado. Socket ID: 20
+[2026-09-17 22:03:13] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 22:05:40] [INFO] Novo cliente cadastrado - Nome: ClienteConcorrente3 | Email: corrida_cadastro_1789682740_61985_0@teste.com
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 13
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 13
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 22
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaTesteReserva | Email: motorista_reserva_1789682740_61985_1@teste.com
+[2026-09-17 22:05:40] [INFO] Trecho ID 71 cadastrado por MotoristaTesteReserva (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_reserva_1789682740_61985_1@teste.com
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 22
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 22:05:40] [INFO] Reserva realizada - Cliente: cliente_reserva_1789682740_61985_5@teste.com | Trecho ID: 70
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 19
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:05:40] [INFO] Reserva realizada - Cliente: cliente_reserva_1789682740_61985_6@teste.com | Trecho ID: 70
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 22:05:40] [INFO] Reserva realizada - Cliente: cliente_reserva_1789682740_61985_3@teste.com | Trecho ID: 70
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 15
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 19
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 15
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 17
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:05:40] [INFO] Reserva cancelada pelo cliente - Cliente: cliente_reserva_1789682740_61985_3@teste.com | ID Trecho: 70
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 17
+[2026-09-17 22:05:40] [WARN] Falha ao cancelar reserva - Cliente: cliente_reserva_1789682740_61985_3@teste.com | ID Trecho: 70
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 9
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc0 | Email: motorista_idconc_1789682740_61985_12@teste.com
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc1 | Email: motorista_idconc_1789682740_61985_13@teste.com
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 11
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 12
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc2 | Email: motorista_idconc_1789682740_61985_14@teste.com
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 13
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc3 | Email: motorista_idconc_1789682740_61985_15@teste.com
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc4 | Email: motorista_idconc_1789682740_61985_16@teste.com
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc6 | Email: motorista_idconc_1789682740_61985_18@teste.com
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 18
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc5 | Email: motorista_idconc_1789682740_61985_17@teste.com
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 14
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc7 | Email: motorista_idconc_1789682740_61985_19@teste.com
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 8
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc8 | Email: motorista_idconc_1789682740_61985_20@teste.com
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc9 | Email: motorista_idconc_1789682740_61985_21@teste.com
+[2026-09-17 22:05:40] [INFO] Novo dispositivo conectado. Socket ID: 16
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc11 | Email: motorista_idconc_1789682740_61985_23@teste.com
+[2026-09-17 22:05:40] [INFO] Novo motorista cadastrado - Nome: MotoristaIdConc10 | Email: motorista_idconc_1789682740_61985_22@teste.com
+[2026-09-17 22:05:40] [INFO] Trecho ID 72 cadastrado por MotoristaIdConc1 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Trecho ID 73 cadastrado por MotoristaIdConc0 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Trecho ID 74 cadastrado por MotoristaIdConc2 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Trecho ID 75 cadastrado por MotoristaIdConc7 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Trecho ID 77 cadastrado por MotoristaIdConc4 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Trecho ID 78 cadastrado por MotoristaIdConc3 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Trecho ID 80 cadastrado por MotoristaIdConc5 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Trecho ID 78 cadastrado por MotoristaIdConc6 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Trecho ID 81 cadastrado por MotoristaIdConc10 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Trecho ID 82 cadastrado por MotoristaIdConc9 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Trecho ID 80 cadastrado por MotoristaIdConc11 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Trecho ID 83 cadastrado por MotoristaIdConc8 (Feira_de_Santana -> Salvador)
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682740_61985_14@teste.com
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682740_61985_12@teste.com
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682740_61985_13@teste.com
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682740_61985_22@teste.com
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 9
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682740_61985_18@teste.com
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 16
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682740_61985_17@teste.com
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 13
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682740_61985_21@teste.com
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682740_61985_19@teste.com
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 14
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682740_61985_16@teste.com
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682740_61985_15@teste.com
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 12
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682740_61985_23@teste.com
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 11
+[2026-09-17 22:05:40] [INFO] Busca de trechos feito pelo motorista: motorista_idconc_1789682740_61985_20@teste.com
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 8
+[2026-09-17 22:05:40] [INFO] Dispositivo desconectado. Socket ID: 18
+[2026-09-17 22:14:18] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 22:15:19] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:15:23] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 22:15:42] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 22:15:46] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:16:00] [INFO] Cliente logado - Nome: Gabriel | Email: gabriel@gmail.com
+[2026-09-17 22:16:45] [INFO] Trecho ID 1 cadastrado por Lucio (Santa_Barbara -> Feira_de_Santana)
+[2026-09-17 22:16:55] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:17:00] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:17:17] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:17:28] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 22:17:30] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:17:36] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:18:27] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:18:31] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:19:11] [INFO] Reserva realizada - Cliente: gabriel@gmail.com | Trecho ID: 0
+[2026-09-17 22:19:16] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:19:20] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:19:26] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:19:33] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:19:35] [INFO] Reserva cancelada pelo cliente - Cliente: gabriel@gmail.com | ID Trecho: 0
+[2026-09-17 22:19:42] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:19:47] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:20:20] [INFO] Reserva realizada - Cliente: gabriel@gmail.com | Trecho ID: 0
+[2026-09-17 22:20:24] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:20:29] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:20:35] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:20:52] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:20:55] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:23:14] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:23:19] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:23:42] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:23:57] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 22:24:00] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:24:04] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:24:09] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:24:21] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 22:24:49] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 22:25:03] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 22:25:06] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:25:09] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:25:15] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:25:19] [INFO] Trecho ID 0 cancelado pelo motorista lucio@gmail.com
+[2026-09-17 22:25:24] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:25:29] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:25:48] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:25:53] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:27:06] [INFO] Rota (multi-trechos) cadastrada por Lucio | Total de trechos: 2
+[2026-09-17 22:27:30] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:28:21] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-09-17 22:28:47] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 22:29:00] [INFO] Motorista logado - Nome: Marcelo | Email: marcelo@gmail.com
+[2026-09-17 22:29:03] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-09-17 22:29:44] [INFO] Trecho ID 4 cadastrado por Marcelo (Feira_de_Santana -> Salvador)
+[2026-09-17 22:29:50] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-09-17 22:31:39] [INFO] Rota finalizada com sucesso (Santa_Barbara -> Salvador)
+[2026-09-17 22:31:51] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:32:22] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-09-17 22:32:37] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 22:32:39] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:33:25] [INFO] Motorista logado - Nome: Marcelo | Email: marcelo@gmail.com
+[2026-09-17 22:33:27] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-09-17 22:33:31] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-09-17 22:33:33] [INFO] Trecho ID 3 cancelado pelo motorista marcelo@gmail.com
+[2026-09-17 22:33:36] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-09-17 22:33:40] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:34:11] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-09-17 22:34:12] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-09-17 22:34:22] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 22:34:24] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:34:28] [INFO] Trecho ID 1 cancelado pelo motorista lucio@gmail.com
+[2026-09-17 22:34:31] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:34:37] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:35:05] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:35:07] [INFO] Trecho ID 2 cancelado pelo motorista lucio@gmail.com
+[2026-09-17 22:35:12] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 22:35:17] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 22:35:20] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 22:35:25] [INFO] Dispositivo desconectado. Socket ID: 4
