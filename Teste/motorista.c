@@ -63,8 +63,15 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
         printf("Array de clientes nao criado!\n");
         return;
     }
+
+    char *email = motorista->email;
+    if (email == NULL){
+        printf("email inválido!\n");
+        return;
+    }
     cJSON_AddStringToObject(trecho, "classe", "Motorista");
     cJSON_AddStringToObject(trecho, "acao", "cadastrar_trecho");
+    cJSON_AddStringToObject(trecho, "emailMotorista", email);
     cJSON_AddStringToObject(trecho, "origem", origem);
     cJSON_AddStringToObject(trecho, "destino", destino);
     cJSON_AddStringToObject(trecho, "data", data);
@@ -169,12 +176,18 @@ void cancelarTrecho(int socketMotorista, Motorista *motorista){
     printf("Digite o ID do trecho que deseja cancelar (ou 00 para voltar): ");
     int idSelecionado;
     scanf("%d", &idSelecionado);
-    if (idSelecionado == 0) return;
+    if (idSelecionado == 00) return;
 
+    char *email = motorista->email;
+    if (email == NULL){
+        printf("email inválido!\n");
+        return;
+    }
     cJSON *cancelar = cJSON_CreateObject();
     cJSON_AddStringToObject(cancelar, "classe", "Motorista");
     cJSON_AddStringToObject(cancelar, "acao", "cancelar_trecho");
     cJSON_AddStringToObject(cancelar, "nome", motorista->nome);
+    cJSON_AddStringToObject(cancelar, "email", email);
     cJSON_AddNumberToObject(cancelar, "idSelecionado", idSelecionado);
     char *mensagem = cJSON_PrintUnformatted(cancelar);
     if (mensagem != NULL) {
@@ -202,6 +215,12 @@ void cadastrarRotaMotorista(int socketMotorista, Motorista *motorista){
     char destinoAnterior[50] = {0};
     int totalAdicionados = 0;
     int sair = 0;
+
+    char *email = motorista->email;
+    if (email == NULL){
+        printf("email inválido!\n");
+        return;
+    }
 
     while (!sair) {
         char origem[50], destino[50];
@@ -236,6 +255,8 @@ void cadastrarRotaMotorista(int socketMotorista, Motorista *motorista){
         cJSON *trecho = cJSON_CreateObject();
         cJSON_AddStringToObject(trecho, "origem", origem);
         cJSON_AddStringToObject(trecho, "destino", destino);
+        cJSON_AddStringToObject(trecho, "nome", motorista->nome);
+        cJSON_AddStringToObject(trecho, "emailMotorista", email);
         cJSON_AddStringToObject(trecho, "data", data);
         cJSON_AddStringToObject(trecho, "hora", hora);
         cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
@@ -251,8 +272,10 @@ void cadastrarRotaMotorista(int socketMotorista, Motorista *motorista){
         printf("Escolha uma opcao: ");
         int escolha;
         scanf("%d", &escolha);
-        if (escolha != 1) {
+        if (escolha == 2) {
             sair = 1;
+        } else if (escolha != 1) {
+            printf("Digite uma opcao valida!\n");
         }
     }
 
@@ -269,8 +292,14 @@ void cadastrarRotaMotorista(int socketMotorista, Motorista *motorista){
     }
     cJSON_Delete(pedido);
 
-    char buffer_mensagem[32] = {0};
+    char buffer_mensagem[50] = {0};
     int bytes = read(socketMotorista, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+
+    if (bytes <= 0) {
+        printf("Erro: Conexao com o servidor perdida.\n");
+        return;
+    }
+
     if (bytes > 0) {
         buffer_mensagem[bytes] = '\0';
         if (strcmp(buffer_mensagem, "ROTA_CADASTRADA") == 0) {
@@ -313,7 +342,7 @@ void telaMenu(int socketMotorista, Motorista *motorista){
             listarTrechos(socketMotorista, motorista);
         } else if (escolha == 4) {
             cancelarTrecho(socketMotorista, motorista);
-        } else if (escolha == 6) {
+        } else if (escolha == 5) {
             cadastrarRotaMotorista(socketMotorista, motorista);
         } else if (escolha == 6) {
             sair = 1;
@@ -321,7 +350,6 @@ void telaMenu(int socketMotorista, Motorista *motorista){
             printf("Opcao invalida. Tente novamente.\n");
         }
     }
-
 }
 
 void telaLogin(int socketMotorista, Motorista *motorista){
@@ -329,7 +357,8 @@ void telaLogin(int socketMotorista, Motorista *motorista){
     int escolha = 0;
     int sair = 0;
     int enviou = 0;
-    fflush(stdin);
+    int c = 0;
+    while (( c = getchar()) != '\n' && c != EOF);
 
     while(sair != 1){
         
@@ -379,10 +408,11 @@ void telaLogin(int socketMotorista, Motorista *motorista){
             if (nome != NULL){
                 printf("Login realizado com sucesso!\n");
                 motorista->status = AUTENTICADO;
-                strncpy(motorista->nome, nome, sizeof(nome) - 1);
-                motorista->nome[sizeof(nome) - 1] = '\0';
+                strncpy(motorista->nome, nome, sizeof(motorista->nome) - 1);
+                motorista->nome[sizeof(motorista->nome) - 1] = '\0';
                 telaMenu(socketMotorista, motorista);
             }
+            cJSON_Delete(respostaJSON);
         }
     }
 }

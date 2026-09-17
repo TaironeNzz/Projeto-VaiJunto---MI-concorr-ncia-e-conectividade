@@ -22,7 +22,7 @@
 22,Ipueira,21,23,50
 23,Paraguassu,22,24,50
 24,Poço_de_Baixo,23,25,27
-25,Gov._Dr._Joao_Durval,Carn,1,24,27,31
+25,Gov._Dr._Joao_Durval_Carneiro,1,24,27,31
 26,Ipecaeta,4,27,28
 27,Santo_Estevao,24,25,26,50
 28,Cavunge,26,29,37

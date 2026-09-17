@@ -1,0 +1,62 @@
+[2026-09-17 17:13:43] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 17:19:45] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 17:41:19] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 17:51:35] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 17:52:01] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 17:52:30] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 17:54:21] [ERROR] Erro ao analisar JSON do socket 4: 17/09/20
+[2026-09-17 17:54:50] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 19:14:18] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 19:17:42] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 19:18:41] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 19:21:18] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 19:22:05] [WARN] Falha de autenticação para o email: lucio@gmail.com
+[2026-09-17 19:22:13] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 19:22:21] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:22:49] [WARN] Falha de autenticação para o email: gabriel@gmail.com
+[2026-09-17 19:22:55] [INFO] Cliente logado - Nome: Gabriel | Email: gabriel@gmail.com
+[2026-09-17 19:24:52] [INFO] Trecho ID 1 cadastrado por Lucio (Santa_Barbara -> Feira_de_Santana)
+[2026-09-17 19:25:06] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:28:10] [INFO] Reserva realizada - Cliente: gabriel@gmail.com | Trecho ID: 0
+[2026-09-17 19:28:35] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:29:13] [INFO] Reserva realizada - Cliente: gabriel@gmail.com | Trecho ID: 0
+[2026-09-17 19:29:42] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:29:50] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:30:05] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:30:08] [INFO] Reserva cancelada pelo cliente - Cliente: gabriel@gmail.com | ID Trecho: 0
+[2026-09-17 19:30:18] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:30:24] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:30:38] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:30:46] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:30:54] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:30:58] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:31:23] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 19:31:29] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 19:56:03] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 19:57:43] [INFO] Servidor iniciado na porta 65432
+[2026-09-17 19:58:45] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-09-17 19:58:48] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-09-17 19:59:02] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-09-17 19:59:08] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 19:59:27] [INFO] Cliente logado - Nome: Gabriel | Email: gabriel@gmail.com
+[2026-09-17 19:59:30] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:59:33] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 19:59:36] [INFO] Reserva cancelada pelo cliente - Cliente: gabriel@gmail.com | ID Trecho: 0
+[2026-09-17 19:59:46] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 20:00:40] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:00:43] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 20:01:24] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:01:32] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 20:02:02] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:02:05] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 20:02:38] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:02:41] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 20:03:41] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:05:12] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-09-17 20:05:34] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-09-17 20:05:46] [INFO] Cliente logado - Nome: Gabriel | Email: gabriel@gmail.com
+[2026-09-17 20:06:20] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:06:24] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-09-17 20:06:29] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-09-17 20:06:32] [INFO] Consulta de reservas solicitada - Cliente: gabriel@gmail.com
+[2026-09-17 20:06:37] [INFO] Dispositivo desconectado. Socket ID: 6

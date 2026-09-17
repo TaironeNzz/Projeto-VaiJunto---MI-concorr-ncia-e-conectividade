@@ -16,5 +16,18 @@ RUN gcc servidor.c cJSON.c grafomapa.c -o servidor_bin -pthread
 # Expor a porta utilizada pelo servidor
 EXPOSE 65432
 
+# docker build -t app-servidor -f DockerFile.Servidor .
+# docker run -d -p 65432:65432 app-servidor
+# -it
+
+#docker run -it \
+#  --name servidor \
+#  -p 65432:65432 \
+#  -v "$(pwd)/dados:/app/dados" \
+#  -v "$(pwd)/trechosCadastrados:/app/trechosCadastrados" \
+#  -v "$(pwd)/logs:/app/logs" \
+#  app-servidor
+
+
 # Comando para iniciar o servidor
 CMD ["./servidor_bin"]

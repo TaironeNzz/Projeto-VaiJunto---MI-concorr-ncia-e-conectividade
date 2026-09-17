@@ -10,5 +10,8 @@ COPY . .
 # Compilar o aplicativo do motorista com a biblioteca cJSON
 RUN gcc motorista.c cJSON.c -o motorista_bin
 
+# docker build -t app-motorista -f DockerFile.Motorista .
+# docker run -it app-motorista
+
 # Comando para iniciar o motorista
 CMD ["./motorista_bin"]

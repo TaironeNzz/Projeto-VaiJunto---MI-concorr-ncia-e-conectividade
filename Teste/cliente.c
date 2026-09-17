@@ -97,10 +97,12 @@ void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino,
         printf("=============================================\n");
         cJSON_Delete(arrayResposta);
 
-        printf("Digite o ID do trecho para adicionar a rota (ou 00 para cancelar): ");
+        printf("Digite o ID do trecho para adicionar a rota (ou -1 para cancelar): ");
         int idSelecionado;
         scanf("%d", &idSelecionado);
-        if (idSelecionado == 0) { cJSON_Delete(arrayRotas); return; }
+        if (idSelecionado == -1) { 
+            cJSON_Delete(arrayRotas); return; 
+        }
 
         char origemEscolhida[50], destinoEscolhido[50];
         printf("Confirme a origem exata do trecho escolhido: ");
@@ -170,7 +172,7 @@ void buscarCarona(int socketCliente, Cliente *cliente) {
     scanf(" %49[^\n]", origem);
     printf("Digite o destino da carona: ");
     scanf(" %49[^\n]", destino);
-    printf("Digite a data da carona: ");
+    printf("Digite a data da carona ou digite (dd/mm/aaaa) para qualquer data: ");
     scanf(" %10[^\n]", data);
     printf("Digite a hora da carona: ");
     scanf(" %5[^\n]", hora);
@@ -257,9 +259,11 @@ void buscarCarona(int socketCliente, Cliente *cliente) {
     printf("====================================\n");
     cJSON_Delete(arrayResposta);
 
-    printf("Selecione a carona desejada pelo ID (ou 00 para voltar): \n");
+    printf("Selecione a carona desejada pelo ID (ou -1 para voltar): \n");
     int idSelecionado;
     scanf("%d", &idSelecionado);
+    if (idSelecionado == -1) return;
+
     cJSON *respostaSelecionada = cJSON_CreateObject();
     cJSON_AddStringToObject(respostaSelecionada, "classe", "Cliente");
     cJSON_AddStringToObject(respostaSelecionada, "acao", "selecionar_carona");
