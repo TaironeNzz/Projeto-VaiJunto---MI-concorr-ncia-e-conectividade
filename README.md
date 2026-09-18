@@ -14,27 +14,15 @@ A porta TCP utilizada pelo programa é **65432**.
 
 ---
 
-## 2. Relação com o problema do PDF
+## 2. Introdução
 
-O enunciado descreve uma plataforma na qual:
+O VaiJunto é um sistema de caronas compartilhadas desenvolvido em linguagem C, com o objetivo de conectar motoristas e passageiros de forma simples e organizada. Por meio do sistema, motoristas podem cadastrar seus trechos de viagem, informando origem, destino, data, horário, quantidade de assentos e preço, enquanto passageiros podem pesquisar caronas disponíveis e realizar suas reservas.
 
-1. motoristas publicam uma rota como sequência ordenada de cidades;
-2. cada trecho possui data, horário, quantidade de assentos e preço;
-3. passageiros procuram itinerários entre origem e destino;
-4. uma viagem pode usar uma única carona ou combinar trechos de motoristas diferentes;
-5. a disponibilidade deve ser controlada por trecho;
-6. reservas concorrentes não podem vender o mesmo assento duas vezes;
-7. a comunicação deve usar TCP/IP e a API de socket nativa;
-8. não devem ser usados frameworks de RPC/mensageria;
-9. deve existir um único servidor central;
-10. o servidor deve atender vários clientes simultaneamente;
-11. mensagens precisam usar uma representação intermediária bem definida;
-12. o servidor deve validar e descartar mensagens malformadas;
-13. os componentes devem ser executados por meio de Docker;
-14. os clientes e o servidor devem conseguir ser executados em computadores distintos;
-15. o produto precisa de documentação do protocolo e de um teste automatizado de concorrência.
+A aplicação funciona no modelo cliente-servidor, utilizando sockets TCP/IP para a comunicação entre os usuários e o servidor central. O servidor é responsável por armazenar e gerenciar as informações de usuários, trechos e reservas, além de controlar o acesso concorrente aos assentos disponíveis.
 
-O projeto atende a maior parte dessa arquitetura. Os itens ainda incompletos ou parciais estão explicitados na seção **"Conformidade e pendências"** deste README.
+O projeto possui dois tipos de clientes: o cliente motorista, utilizado para cadastrar, consultar e cancelar trechos, e o cliente passageiro, utilizado para buscar, reservar, visualizar e cancelar caronas. Também é possível montar uma viagem utilizando mais de um trecho, permitindo representar trajetos maiores por meio da combinação de diferentes caronas.
+
+Para facilitar a execução e a reprodução do sistema, o projeto utiliza Docker, permitindo que o servidor e os clientes sejam executados em ambientes separados. Dessa forma, o VaiJunto reúne conceitos de programação em rede, arquitetura cliente-servidor, persistência de dados e concorrência em uma aplicação distribuída
 
 ---
 
@@ -80,40 +68,7 @@ O cliente não acessa os arquivos do servidor diretamente. Toda operação passa
 
 ---
 
-# 4. Estrutura de diretórios
-
-A estrutura recomendada do repositório é:
-
-```text
-VaiJunto/
-├── README.md
-├── Dockerfile.Servidor
-├── Dockerfile.Motorista
-├── Dockerfile.Cliente
-├── .dockerignore
-│
-├── servidor.c
-├── motorista.c
-├── cliente.c
-├── formatos.h
-│
-├── cJSON.c
-├── cJSON.h
-│
-├── grafomapa.c
-├── grafomapa.h
-├── mapa.txt
-│
-├── dados/
-│   ├── loginCliente.json
-│   └── loginMotorista.json
-│
-├── trechosCadastrados/
-│   └── trechos.json
-│
-└── logs/
-    └── servidor.log
-```
+# 4. Arquivos
 
 ### Função dos arquivos
 
@@ -132,8 +87,6 @@ VaiJunto/
 | `trechosCadastrados/` | Trechos e reservas persistidos |
 | `logs/` | Registro das operações do servidor |
 | `Dockerfile.*` | Construção dos containers |
-
-> Os arquivos enviados para esta documentação possuem nomes de versão no anexo, como `cliente(4).c` e `servidor(3).c`. No repositório recomenda-se usar os nomes canônicos `cliente.c`, `motorista.c` e `servidor.c`.
 
 ---
 
@@ -218,15 +171,6 @@ O servidor também instala:
 - `ca-certificates`, para manter o ambiente padrão do container.
 
 A biblioteca cJSON continua sendo compilada a partir dos arquivos locais do projeto.
-
-Não são utilizados:
-
-- bancos de dados;
-- frameworks RPC;
-- brokers de mensagens;
-- bibliotecas de comunicação de alto nível.
-
-Isso mantém a comunicação dentro da restrição do problema: **socket TCP/IP nativo**.
 
 ---
 
@@ -482,24 +426,6 @@ pacote 2 -> ionar_carona","idSelecionado":3,...}
 ```
 
 O servidor acumula os bytes até conseguir interpretar o objeto JSON.
-
-### Limitação importante
-
-A implementação atual não possui um cabeçalho de tamanho nem um delimitador explícito (`\n`, por exemplo) para cada mensagem.
-
-Portanto, para uma implementação de produção ou para garantir interoperabilidade mais rigorosa entre linguagens, o protocolo deve evoluir para:
-
-```text
-[4 bytes: tamanho da mensagem][JSON]
-```
-
-ou:
-
-```text
-JSON\n
-```
-
-O README documenta o protocolo **existente no código entregue**, mas essa melhoria de framing é recomendada para eliminar ambiguidades de leitura/coalescência do TCP.
 
 ---
 
@@ -1160,31 +1086,19 @@ Isso impede que caronas antigas continuem aparecendo indefinidamente.
 Build:
 
 ```bash
-docker build -t vaijunto-servidor -f Dockerfile.Servidor .
+docker build -t app-servidor -f DockerFile.Servidor .
 ```
 
 Execução Linux/macOS:
 
 ```bash
 docker run -d \
-  --name vaijunto-servidor \
+  --name servidor \
   -p 65432:65432 \
   -v "$(pwd)/dados:/app/dados" \
   -v "$(pwd)/trechosCadastrados:/app/trechosCadastrados" \
   -v "$(pwd)/logs:/app/logs" \
-  vaijunto-servidor
-```
-
-PowerShell:
-
-```powershell
-docker run -d `
-  --name vaijunto-servidor `
-  -p 65432:65432 `
-  -v "${PWD}/dados:/app/dados" `
-  -v "${PWD}/trechosCadastrados:/app/trechosCadastrados" `
-  -v "${PWD}/logs:/app/logs" `
-  vaijunto-servidor
+  app-servidor
 ```
 
 ---
@@ -1192,13 +1106,13 @@ docker run -d `
 ## 22.2 Imagem do motorista
 
 ```bash
-docker build -t vaijunto-motorista -f Dockerfile.Motorista .
+docker build -t app-motorista -f Dockerfile.Motorista .
 ```
 
 Executar:
 
 ```bash
-docker run --rm -it vaijunto-motorista
+docker run --rm -it app-motorista
 ```
 
 Quando o programa solicitar:
@@ -1214,13 +1128,13 @@ informe o IPv4 da máquina que executa o servidor.
 ## 22.3 Imagem do passageiro
 
 ```bash
-docker build -t vaijunto-cliente -f Dockerfile.Cliente .
+docker build -t app-cliente -f Dockerfile.Cliente .
 ```
 
 Executar:
 
 ```bash
-docker run --rm -it vaijunto-cliente
+docker run --rm -it app-cliente
 ```
 
 Informe o mesmo IP do servidor.
@@ -1245,11 +1159,6 @@ Linux:
 ip addr
 ```
 
-Windows:
-
-```powershell
-ipconfig
-```
 
 Exemplo:
 
@@ -1518,26 +1427,19 @@ Falha de autenticação
 Servidor:
 
 ```bash
-gcc -std=c11 -Wall -Wextra -O2 \
-    servidor.c grafomapa.c cJSON.c \
-    -pthread -lm \
-    -o servidor_bin
+gcc servidor.c grafomapa.c cJSON.c -o servidor_bin -pthread 
 ```
 
 Motorista:
 
 ```bash
-gcc -std=c11 -Wall -Wextra -O2 \
-    motorista.c cJSON.c \
-    -o motorista_bin
+gcc motorista.c cJSON.c -o motorista_bin
 ```
 
 Cliente:
 
 ```bash
-gcc -std=c11 -Wall -Wextra -O2 \
-    cliente.c cJSON.c \
-    -o cliente_bin
+gcc cliente.c cJSON.c -o cliente_bin
 ```
 
 Depois:
@@ -1555,275 +1457,9 @@ e, em outros terminais:
 ```bash
 ./cliente_bin
 ```
-
 ---
-
-# 31. Teste básico de comunicação
-
-Sequência mínima:
-
-### Teste 1 - Servidor
-
-Verificar:
-
-```text
-Servidor iniciado na porta 65432
-```
-
-### Teste 2 - Motorista
-
-1. cadastrar/login;
-2. cadastrar um trecho;
-3. listar trecho.
-
-Esperado:
-
-```text
-TRECHO_CADASTRADO
-```
-
-e o trecho aparecer na listagem.
-
-### Teste 3 - Passageiro
-
-1. cadastrar/login;
-2. buscar a carona;
-3. selecionar o ID;
-4. verificar resposta.
-
-Esperado:
-
-```text
-CARONA_RESERVADA
-```
-
-### Teste 4 - Concorrência
-
-Executar dois ou mais passageiros tentando reservar o último assento simultaneamente.
-
-Esperado:
-
-```text
-somente um cliente -> CARONA_RESERVADA
-demais clientes -> ASSENTO_INDISPONIVEL
-```
-
-O arquivo não deve apresentar capacidade negativa.
-
 ---
-
-# 32. Teste concorrente exigido pelo enunciado
-
-O PDF determina um **teste automatizado** com múltiplos clientes disputando os mesmos trechos.
-
-O teste deve verificar pelo menos:
-
-1. vários clientes executando `selecionar_carona` simultaneamente;
-2. nenhum assento vendido duas vezes;
-3. capacidade nunca menor que zero;
-4. estado consistente de `clientes[]`;
-5. nenhum itinerário confirmado pela metade;
-6. tempo de resposta sob carga.
-
-## Estratégia recomendada
-
-Preparar:
-
-```text
-capacidade = 1
-```
-
-e iniciar, por exemplo:
-
-```text
-10 clientes
-```
-
-tentando reservar o mesmo trecho.
-
-Resultado esperado:
-
-```text
-1 sucesso
-9 falhas por falta de assento
-```
-
-O teste deve registrar:
-
-```text
-tempo total
-tempo médio
-maior tempo
-menor tempo
-quantidade de reservas aceitas
-quantidade de reservas recusadas
-```
-
-### Situação atual
-
-Entre os arquivos enviados para elaboração deste README **não existe um programa de teste automatizado de concorrência**.
-
-Portanto, este requisito do PDF deve ser tratado como pendência de implementação/teste, mesmo que o servidor já possua mutexes para proteger as operações concorrentes.
-
----
-
-# 33. Conformidade com os requisitos do problema
-
-| Requisito do PDF | Situação |
-|---|---|
-| Servidor central único | Implementado |
-| Clientes motorista e passageiro | Implementado |
-| Socket TCP/IP nativo | Implementado |
-| Sem framework RPC/mensageria | Implementado |
-| Docker | Implementado/documentado |
-| Clientes em computadores diferentes | Suportado/documentado |
-| Representação intermediária bem definida | JSON/cJSON |
-| Atendimento simultâneo | Implementado com `pthread` |
-| Controle concorrente de assentos | Implementado com `trechosMutex` |
-| Cadastro/autenticação | Implementado |
-| Publicação de trechos | Implementado |
-| Publicação de rota | Implementado |
-| Busca de caronas | Implementado |
-| Reserva | Implementado |
-| Consulta/cancelamento de reserva | Implementado |
-| Combinação de trechos | Implementado parcialmente |
-| Rollback de reservas em falha de finalização | Implementado |
-| Proteção contra dois clientes no mesmo assento | Protegido pelo mutex |
-| Expiração de trechos | Implementado |
-| Protocolo de aplicação documentado | Documentado neste README |
-| Exemplos de mensagens | Documentados neste README |
-| Teste automatizado concorrente | **Ainda necessário** |
-| Consulta dos passageiros confirmados pelo motorista | **Ainda necessário no cliente atual** |
-| Atomicidade completa em caso de queda abrupta do cliente | **Parcial** |
-| Framing explícito de mensagens TCP | **Melhoria recomendada** |
-
----
-
-# 34. Pontos que precisam ser observados na apresentação
-
-## 34.1 Atomicidade
-
-O enunciado exige:
-
-> ou todos os trechos do itinerário são reservados, ou nenhum.
-
-O código atual reserva trechos durante a montagem da rota e, no final, executa uma validação. Se a validação falha, tenta desfazer as reservas.
-
-Isso fornece um mecanismo de rollback.
-
-Porém, existe uma diferença entre rollback por lógica de aplicação e uma transação realmente protegida contra falhas do processo.
-
-Se o cliente cair no meio da montagem do itinerário antes de `finalizar_rota`, o estado pode exigir limpeza adicional.
-
-Esse comportamento deve ser tratado como uma limitação conhecida ou corrigido em uma versão posterior.
-
----
-
-## 34.2 Passageiros confirmados pelo motorista
-
-O enunciado pede que o motorista consiga:
-
-> "consultar as caronas já publicadas e os passageiros confirmados em cada trecho"
-
-A estrutura do servidor já armazena os passageiros no campo:
-
-```json
-"clientes": [
-    "ana@email.com"
-]
-```
-
-Porém a função atual de listagem do motorista retorna principalmente:
-
-```text
-ID
-Origem
-Destino
-Data
-Hora
-Capacidade
-Preço
-```
-
-e não exibe, no menu atual, a lista completa de passageiros de cada trecho.
-
-Para aderir integralmente ao enunciado, deve ser adicionada uma operação de consulta dos passageiros confirmados.
-
----
-
-# 35. Segurança e validação
-
-O sistema é um protótipo acadêmico e não implementa segurança de produção.
-
-As senhas são persistidas nos arquivos de login.
-
-Não há:
-
-- TLS;
-- hash de senha;
-- token de sessão;
-- criptografia;
-- controle de acesso avançado.
-
-A validação de mensagens é feita principalmente por:
-
-```cJSON_Parse()
-```
-
-e pela análise dos campos esperados.
-
-Mensagens que não formam JSON válido são rejeitadas e registradas no log.
-
----
-
-# 36. Limitações atuais conhecidas
-
-1. O protocolo não possui cabeçalho de tamanho nem delimitador explícito.
-2. O código de teste concorrente exigido pelo enunciado ainda não está presente nos arquivos enviados.
-3. O cliente motorista ainda não mostra a lista detalhada de passageiros por trecho.
-4. A atomicidade do itinerário combinado depende do rollback da etapa de finalização.
-5. O armazenamento é baseado em arquivos JSON, não em banco de dados.
-6. As credenciais são armazenadas sem proteção criptográfica.
-7. O sistema foi pensado para um único servidor central.
-8. O servidor não possui mecanismo de replicação ou failover.
-
-Essas limitações não devem ser escondidas durante a apresentação; devem ser tratadas como decisões do protótipo ou pontos de evolução.
-
----
-
-# 37. Checklist de demonstração
-
-Antes da apresentação, verificar:
-
-```text
-[ ] servidor inicia
-[ ] mapa.txt está presente
-[ ] cJSON.h/cJSON.c estão presentes
-[ ] grafomapa.c/grafomapa.h estão presentes
-[ ] diretórios de dados existem
-[ ] porta TCP 65432 está liberada
-[ ] motorista consegue conectar
-[ ] passageiro consegue conectar
-[ ] cadastro funciona
-[ ] login funciona
-[ ] motorista cadastra trecho
-[ ] motorista lista trecho
-[ ] passageiro encontra carona
-[ ] passageiro reserva
-[ ] capacidade diminui
-[ ] reserva aparece em "minhas caronas"
-[ ] passageiro cancela
-[ ] capacidade aumenta
-[ ] motorista cancela trecho
-[ ] rota com múltiplos trechos funciona
-[ ] containers estão em computadores distintos
-[ ] logs estão sendo gerados
-[ ] teste concorrente está preparado
-```
-
----
-
-# 38. Comandos úteis
+# 31. Comandos úteis
 
 Ver containers:
 
@@ -1836,40 +1472,35 @@ Ver todos:
 ```bash
 docker ps -a
 ```
-
-Logs do servidor:
-
-```bash
-docker logs -f vaijunto-servidor
 ```
 
 Entrar no container do servidor:
 
 ```bash
-docker exec -it vaijunto-servidor bash
+docker exec -it app-servidor bash
 ```
 
 Parar:
 
 ```bash
-docker stop vaijunto-servidor
+docker stop app-servidor
 ```
 
 Remover:
 
 ```bash
-docker rm vaijunto-servidor
+docker rm app-servidor
 ```
 
 Reconstruir sem cache:
 
 ```bash
-docker build --no-cache -t vaijunto-servidor -f Dockerfile.Servidor .
+docker build --no-cache -t app-servidor -f Dockerfile.Servidor .
 ```
 
 ---
 
-# 39. Reprodutibilidade
+# 32. Reprodutibilidade
 
 Para reproduzir o ambiente:
 
@@ -1893,41 +1524,9 @@ logs/
 ```
 
 ---
-
-# 40. Observação sobre o relatório acadêmico
-
-O enunciado separa o README do relatório em formato SBC.
-
-O README deste projeto é destinado principalmente ao:
-
-- funcionamento;
-- instalação;
-- execução;
-- protocolo;
-- estrutura;
-- dependências;
-- operação;
-- testes;
-- limitações.
-
-O relatório SBC deve tratar, separadamente:
-
-- fundamentação teórica;
-- arquitetura distribuída;
-- TCP/IP;
-- sockets;
-- concorrência;
-- controle de assentos;
-- persistência;
-- decisões de projeto;
-- resultados experimentais;
-- referências.
-
-O PDF estabelece que o relatório SBC deve ter no máximo **8 páginas**.
-
 ---
 
-# 41. Resumo do protocolo
+# 33. Resumo do protocolo
 
 ```text
 TRANSPORTE
@@ -1976,10 +1575,6 @@ SERVIDOR
 
 ---
 
-# 42. Referência do problema
+# 34. Referência do problema
 
-**Problema 1 - VAIJUNTO: Sistema de Caronas Compartilhadas**, TEC502.
-
-O enunciado determina, entre outros pontos, o uso de TCP/IP com API Socket nativa, containers Docker, servidor central único, tratamento concorrente das reservas, representação intermediária bem definida, execução em computadores distintos e documentação do protocolo.
-
-Este README deve permanecer versionado junto ao código no GitHub.
+TANENBAUM, Andrew S.; FEAMSTER, Nick; WETHERALL, David J. *Redes de computadores*. 6. ed. São Paulo: Pearson / Porto Alegre: Bookman, 2021.
