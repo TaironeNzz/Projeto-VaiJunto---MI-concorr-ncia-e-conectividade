@@ -123,6 +123,10 @@ PBL/
 - POSIX Threads (`pthread`)
 - habilitada na compilação com `-pthread`
 
+### Plataforma utilizada
+
+- Plataforma de Contentores: Docker instalado para execução isolada em ambiente multi-computador.
+
 ### Rede
 
 A implementação utiliza a API nativa de sockets:
@@ -149,6 +153,8 @@ arpa/inet.h
 netdb.h
 unistd.h
 pthread.h
+time.h
+stdarg.h
 ```
 
 ### JSON
