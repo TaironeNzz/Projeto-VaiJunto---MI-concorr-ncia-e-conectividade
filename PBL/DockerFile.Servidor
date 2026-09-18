@@ -17,8 +17,6 @@ RUN gcc servidor.c cJSON.c grafomapa.c -o servidor_bin -pthread
 EXPOSE 65432
 
 # docker build -t app-servidor -f DockerFile.Servidor .
-# docker run -d -p 65432:65432 app-servidor
-# -it
 
 #docker run -it \
 #  --name servidor \
