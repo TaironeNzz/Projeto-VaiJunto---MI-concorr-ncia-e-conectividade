@@ -1675,6 +1675,6 @@ SERVIDOR
 
 ---
 
-# 35. Referência do problema
+# 35. Referência
 
 TANENBAUM, Andrew S.; FEAMSTER, Nick; WETHERALL, David J. *Redes de computadores*. 6. ed. São Paulo: Pearson / Porto Alegre: Bookman, 2021.
