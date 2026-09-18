@@ -69,7 +69,7 @@ O cliente não acessa os arquivos do servidor diretamente. Toda operação passa
 ---
 
 # 4. Estrutura de diretórios
-
+```text
 PBL/
 ├── dados/                    # Ficheiros de dados dos utilizadores (loginCliente.json, loginMotorista.json)
 ├── trechosCadastrados/        # Persistência dos trechos e reservas (trechos.json)
@@ -87,7 +87,7 @@ PBL/
 ├── DockerFile.Servidor       # Ficheiro de compilação Docker para o servidor
 ├── Dockerfile.Motorista      # Ficheiro de compilação Docker para o motorista
 ├── Dockerfile.Cliente        # Ficheiro de compilação Docker para o passageiro
-
+```
 ### Função dos arquivos
 
 | Arquivo | Função |
