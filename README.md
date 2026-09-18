@@ -1,1 +1,0 @@
-# Projeto-VaiJunto---MI-concorr-ncia-e-conectividade
