@@ -68,13 +68,32 @@ O cliente não acessa os arquivos do servidor diretamente. Toda operação passa
 
 ---
 
-# 4. Arquivos
+# 4. Estrutura de diretórios
+
+PBL/
+├── dados/                    # Ficheiros de dados dos utilizadores (loginCliente.json, loginMotorista.json)
+├── trechosCadastrados/        # Persistência dos trechos e reservas (trechos.json)
+├── logs/                     # Registos de auditoria e eventos do servidor (servidor.log)
+├── TestesConcorrência        # arquivos de testes para concorrência
+├── cJSON.c                   # Implementação do parser JSON em C
+├── cJSON.h                   # Cabeçalho da biblioteca cJSON
+├── cliente.c                 # Aplicação de terminal para o passageiro
+├── motorista.c               # Aplicação de terminal para o motorista
+├── servidor.c                # Servidor central e gestão de concorrência
+├── formatos.h                # Estruturas de dados (Cliente, Motorista, Status)
+├── grafomapa.c               # Módulo do grafo para validação e rotas
+├── grafomapa.h               # Interface do módulo do grafo
+├── mapa.txt                  # Grafo com as cidades e ligações geográficas
+├── DockerFile.Servidor       # Ficheiro de compilação Docker para o servidor
+├── Dockerfile.Motorista      # Ficheiro de compilação Docker para o motorista
+├── Dockerfile.Cliente        # Ficheiro de compilação Docker para o passageiro
 
 ### Função dos arquivos
 
 | Arquivo | Função |
 |---|---|
 | `servidor.c` | Servidor central, sockets, concorrência, persistência e regras das caronas |
+| `teste_concorrencia.c` | Testes para a concorrência|
 | `motorista.c` | Aplicação de terminal do motorista |
 | `cliente.c` | Aplicação de terminal do passageiro |
 | `formatos.h` | Estruturas `Cliente`, `Motorista`, `lista_trechos` e enum `Status` |
