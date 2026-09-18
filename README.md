@@ -1493,9 +1493,73 @@ Executar o código do teste (servidor precisa estar rodando)
 ```bash
 ./teste_concorrencia <ip do servidor>
 ```
+Saída dos testes
+```bash
+============================================================
+ TESTE 1: Cadastro concorrente do MESMO email (cliente)
+============================================================
+Disparando 8 cadastros simultaneos para o email: corrida_cadastro_1789697806_111794_0@teste.com
+Resultado: 1 sucesso(s) | 7 'ja cadastrado' | 0 outro/erro
+>>> PASSOU: exatamente 1 cadastro foi aceito, os demais foram barrados.
+
+============================================================
+ TESTE 2: Reserva concorrente da MESMA carona (capacidade limitada)
+============================================================
+Cadastrando 1 trecho Feira_de_Santana -> Salvador com capacidade = 3 ...
+Trecho cadastrado com ID = 26
+Disparando 10 clientes tentando reservar os 3 assento(s) ao mesmo tempo...
+Resultado: 3 reservada(s) | 7 sem assento | 0 outro/erro
+>>> PASSOU: exatamente 3 reservas vingaram (nenhum overbooking).
+
+============================================================
+ TESTE 3: Cancelamento concorrente da MESMA reserva
+============================================================
+Duas threads tentando cancelar a MESMA reserva (id=26, cliente=cliente_reserva_1789697806_111794_3@teste.com) ao mesmo tempo...
+Resultado: 1 cancelada(s) | 1 'nao encontrada' | 0 outro/erro
+>>> PASSOU: apenas uma das duas tentativas cancelou a reserva.
+
+============================================================
+ TESTE 4: Cadastro concorrente de trechos (varios motoristas)
+============================================================
+Disparando 12 motoristas cadastrando um trecho cada, ao mesmo tempo...
+Resultado: 12 trechos cadastrados com sucesso | 0 erro(s) | 0 ID(s) duplicado(s)
+>>> PASSOU: todos os trechos foram cadastrados com IDs unicos.
+
+============================================================
+ TESTE 5: Cadastro concorrente do MESMO email (motorista)
+============================================================
+Disparando 8 cadastros simultaneos para o email: corrida_cadastro_motorista_1789697806_111794_24@teste.com
+Resultado: 1 sucesso(s) | 7 'ja cadastrado' | 0 outro/erro
+>>> PASSOU: exatamente 1 cadastro de motorista foi aceito, os demais foram barrados.
+
+============================================================
+ TESTE 6: Reservas simultaneas em trechos DIFERENTES (sem contencao / sem deadlock)
+============================================================
+Cadastrando 6 trechos independentes (Feira_de_Santana -> Salvador, capacidade=1)...
+Disparando 6 clientes reservando 6 trechos DIFERENTES ao mesmo tempo...
+Resultado: 6 reservada(s) de 6 | 0 outro/erro | tempo total: 0.006s
+>>> PASSOU: todas as reservas em trechos distintos foram bem-sucedidas, sem travar.
+
+============================================================
+ TESTE 7: Leituras concorrentes durante escritas no mesmo arquivo (trechos.json)
+============================================================
+Preparando 1 motorista com um trecho ja cadastrado (alvo das leituras)...
+Disparando 5 leitores (listar_trechos x5 cada) e 5 escritores (cadastrar_trecho) ao mesmo tempo...
+Resultado: 5/5 leitores com respostas sempre validas | 5/5 escritas com sucesso
+>>> PASSOU: nenhuma leitura recebeu resposta corrompida durante as escritas simultaneas.
+
+============================================================
+ TESTE 8: Motorista cancelando o trecho x Cliente reservando o MESMO trecho
+============================================================
+Trecho de teste cadastrado com ID = 51 (capacidade = 1)
+Disparando o cancelamento do trecho (motorista) e a reserva (cliente) ao mesmo tempo...
+Resposta do cancelamento (motorista): TRECHO_CANCELADO
+Resposta da reserva (cliente):        TRECHO_NAO_ENCONTRADO
+>>> OK (diagnostico): o servidor respondeu as duas operacoes concorrentes sem travar nem corromper a resposta. Confira manualmente se a combinacao acima faz sentido (ex.: reserva 'CARONA_RESERVADA' + cancelamento 'TRECHO_CANCELADO' significa que um cliente pode ficar com uma reserva 'orfa' de um trecho que o motorista cancelou).
+```
 ---
 ---
-# 31. Comandos úteis
+# 32. Comandos úteis
 
 Ver containers:
 
@@ -1536,7 +1600,7 @@ docker build --no-cache -t app-servidor -f Dockerfile.Servidor .
 
 ---
 
-# 32. Reprodutibilidade
+# 33. Reprodutibilidade
 
 Para reproduzir o ambiente:
 
@@ -1562,7 +1626,7 @@ logs/
 ---
 ---
 
-# 33. Resumo do protocolo
+# 34. Resumo do protocolo
 
 ```text
 TRANSPORTE
@@ -1611,6 +1675,6 @@ SERVIDOR
 
 ---
 
-# 34. Referência do problema
+# 35. Referência do problema
 
 TANENBAUM, Andrew S.; FEAMSTER, Nick; WETHERALL, David J. *Redes de computadores*. 6. ed. São Paulo: Pearson / Porto Alegre: Bookman, 2021.
