@@ -1484,6 +1484,17 @@ e, em outros terminais:
 ```
 ---
 ---
+# 31 Execução do teste
+Compilar o código do teste
+```bash
+gcc -Wall -O2 -o teste_concorrencia teste_concorrencia.c -lpthread
+```
+Executar o código do teste (servidor precisa estar rodando)
+```bash
+./teste_concorrencia <ip do servidor>
+```
+---
+---
 # 31. Comandos úteis
 
 Ver containers:
