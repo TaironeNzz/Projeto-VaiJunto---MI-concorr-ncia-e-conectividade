@@ -13,10 +13,11 @@
 #include <time.h>
 #include <stdarg.h>
 #define PORT 65432
-
+//grafo do mapa para verificação de caminhos
 Grafo *mapa;
-
+//id dos trechos
 int idTrecho = 0;
+//mutexes para os arquivos
 pthread_mutex_t trechosMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t loginMotoristaMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t loginClienteMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -64,6 +65,7 @@ void log_mensagem(LogLevel level, const char *format, ...) {
     pthread_mutex_unlock(&logMutex);
 }
 
+//função que percorre o arquivo de trechos e pega o ultimo id, incrementa e adiciona na variavel idtrecho
 void encontrarID(){
     FILE *arquivo = fopen("trechosCadastrados/trechos.json", "r");
     if (arquivo == NULL) {
@@ -85,6 +87,7 @@ void encontrarID(){
     fclose(arquivo);
 }
 
+//função auxiliar para remover trechos que chegaram na data de partida
 int trechoExpirado(const char *data, const char *hora) {
     struct tm trechoTm = {0};
     int dia, mes, ano, horaInt, minuto;
@@ -107,6 +110,7 @@ int trechoExpirado(const char *data, const char *hora) {
     return tempoTrecho < time(NULL);
 }
 
+//função para remover trechos que chegaram na data de partida
 void limparTrechosExpirados(void) {
     pthread_mutex_lock(&trechosMutex);
 
@@ -147,6 +151,7 @@ void limparTrechosExpirados(void) {
     pthread_mutex_unlock(&trechosMutex);
 }
 
+//rotina para a thread de limpeza
 void *rotinaLimpezaTrechos(void *arg) {
     (void)arg;
     while (1) {
@@ -156,6 +161,7 @@ void *rotinaLimpezaTrechos(void *arg) {
     return NULL;
 }
 
+//função para cadastrar o cliente
 void cadastrarCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
     char dadosLogin[1024] = {0};
     int emailEncontrado = 0;
@@ -189,6 +195,7 @@ void cadastrarCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
     fflush(arquivoLogin);
 }
 
+//função para cadastrar o motorista
 void cadastrarMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
     int emailEncontrado = 0;
     char dadosLogin[1024] = {0};
@@ -221,6 +228,7 @@ void cadastrarMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
     pthread_mutex_unlock(&loginMotoristaMutex);
 }
 
+//função para cadastrar o trecho
 int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos){
     if (mapa == NULL) {
         printf("Mapa nao carregado. Nao e possivel cadastrar trecho.\n");
@@ -228,6 +236,7 @@ int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
         return 0;
     }
 
+    //variaveis para armazenar os campos do cjsonLogin (requisição)
     char *emailMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailMotorista"));
     char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
     char *origem = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origem"));
@@ -239,6 +248,7 @@ int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
     cJSON *arrayClientes = cJSON_GetObjectItem(jsonLogin, "clientes");
 
     if (mapa != NULL) {
+        //verifica se tem caminho pelo grafo do mapa
         if (existeCaminhoBFSPorNome(mapa, origem, destino)) {
             rewind(arquivoTrechos);
             pthread_mutex_lock(&trechosMutex);
@@ -247,6 +257,8 @@ int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
                 pthread_mutex_unlock(&trechosMutex);
                 return 0;
             }
+
+            //cjson para armazenar no arquivo de trechos
             cJSON *trecho = cJSON_CreateObject();
             cJSON_AddNumberToObject(trecho, "idTrecho", idTrecho);
             cJSON_AddStringToObject(trecho, "nomeMotorista", nomeMotorista);
@@ -257,9 +269,11 @@ int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
             cJSON_AddStringToObject(trecho, "hora", hora);
             cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
             cJSON_AddNumberToObject(trecho, "preco", preco);
-
+            //array de emails dos clientes que estão no trecho
             cJSON_AddItemToObject(trecho, "clientes", cJSON_Duplicate(arrayClientes, 1));
+            //transforma em string
             char *saida = cJSON_PrintUnformatted(trecho);
+            //salva no arquivo de trechos
             fprintf(arquivoTrechos, "%s\n", saida);
             free(saida);
             cJSON_Delete(trecho);
@@ -276,6 +290,7 @@ int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
     }
 }
 
+//função para pegar os trechos de um motorista dos arquivos e retornar para o motorista
 void listar_trechos(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos){
     char dadosTrechos[4096] = {0};
     pthread_mutex_lock(&trechosMutex);
@@ -320,6 +335,7 @@ void listar_trechos(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos)
     cJSON_Delete(arrayResposta);
 }
 
+//função para acessar o arquivo de login e verificar se o email e senha estão certos
 void loginMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
     int emailEncontrado = 0;
     char dadosLogin[1024] = {0};
@@ -359,6 +375,7 @@ void loginMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
     pthread_mutex_unlock(&loginMotoristaMutex);
 }
 
+//função para cancelar trecho de um motorista
 void cancelarTrechoMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos){
     int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
     char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
@@ -428,6 +445,7 @@ void cancelarTrechoMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquiv
     }
 }
 
+//função para um motorista cadastrar sua rota informando os trechos
 void cadastrarRota(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos){
     char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
     cJSON *trechosArray = cJSON_GetObjectItem(jsonLogin, "trechos");
@@ -518,6 +536,7 @@ void cadastrarRota(cJSON *jsonLogin, int socketMotorista, FILE *arquivoTrechos){
     send(socketMotorista, "ROTA_CADASTRADA", 16, 0);
 }
 
+//função para tratar todas as ações do motorista
 void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
     char dadosLogin[4096] = {0};
     int emailEncontrado = 0;
@@ -560,6 +579,7 @@ void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
     return;
 }
 
+//função para acessar o arquivo de login e verificar se o email e senha do cliente estão certos 
 void loginCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
     int emailEncontrado = 0;
     char dadosLogin[1024] = {0};
@@ -591,6 +611,7 @@ void loginCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
     pthread_mutex_unlock(&loginClienteMutex);
 }
 
+//função para buscar as caronas que o usuário pediu
 void buscar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
     char dadosTrechos[4096] = {0};
     pthread_mutex_lock(&trechosMutex);
@@ -641,6 +662,7 @@ void buscar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
     cJSON_Delete(arrayResposta);
 }
 
+//função para reservar a carona que o cliente escolheu
 void selecionar_carona(cJSON *jsonLogin, int socketCliente){
     int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
     int trechoEncontrado = 0;
@@ -722,6 +744,7 @@ void selecionar_carona(cJSON *jsonLogin, int socketCliente){
     }
 }
 
+//função para adicionar o trecho na rota do cliente
 void AddTrechoNaRota(cJSON *jsonLogin, int socketCliente){
     int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
     int trechoEncontrado = 0;
@@ -806,6 +829,7 @@ void AddTrechoNaRota(cJSON *jsonLogin, int socketCliente){
     
 }
 
+//função para o cliente cancelar uma reserva da carona
 int cancelarReservaInterna(int idSelecionado, char *emailCliente){
     int trechoEncontrado = 0;
     int clienteEncontrado = 0;
@@ -862,7 +886,7 @@ int cancelarReservaInterna(int idSelecionado, char *emailCliente){
     return clienteEncontrado;
 }
 
-//naaao termineei
+//função para verificar se a rota cumpre o caminho da origem até o destino, caso não, as reservas são canceladas
 void finalizar_Rota(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
     int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
     int trechoEncontrado = 0;
@@ -924,6 +948,7 @@ void finalizar_Rota(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
     }
 }
 
+//função para obter as reservas do cliente
 void listar_reservas(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
     char dadosTrechos[4096] = {0};
     pthread_mutex_lock(&trechosMutex);
@@ -978,6 +1003,7 @@ void listar_reservas(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
     cJSON_Delete(arrayResposta);
 }
 
+//função para cancelar a reserva do cliente
 void cancelar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
     int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
     char *emailCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailCliente"));
@@ -993,6 +1019,7 @@ void cancelar_carona(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
     }
 }
 
+//função para buscar os possiveis trechos partido de uma origem e destino
 void buscar_trechos_partida(cJSON *jsonLogin, int socketCliente, FILE *arquivoTrechos){
     char dadosTrechos[4096] = {0};
     pthread_mutex_lock(&trechosMutex);
@@ -1035,6 +1062,7 @@ void buscar_trechos_partida(cJSON *jsonLogin, int socketCliente, FILE *arquivoTr
     cJSON_Delete(arrayResposta);
 }
 
+//função para tratar as ações do cliente
 void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
     char dadosLogin[1024] = {0};
     char dadosTrechos[4096] = {0};
@@ -1081,6 +1109,7 @@ void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
     return;
 }
 
+//rotina de tratamento para cada thread
 void *rotinaTratamento(void *arg){
     int socket = *(int*)arg;
     free(arg);
@@ -1094,7 +1123,7 @@ void *rotinaTratamento(void *arg){
         json = NULL;
 
         /* Acumula os bytes recebidos ate conseguir parsear um JSON completo.
-         * Uma unica mensagem pode chegar dividida em varios pacotes TCP
+         * porque uma unica mensagem pode chegar dividida em varios pacotes TCP
          * (especialmente entre maquinas diferentes), e uma unica chamada
          * a read() nao garante receber a mensagem inteira de uma vez. */
         while (json == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
@@ -1168,6 +1197,7 @@ int main(){
         exit(EXIT_FAILURE);
     }
     
+    //cria o socket do servidor
     if ((socketServidor = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         log_mensagem(LOG_ERROR, "Falha ao criar o socket do servidor: %m");
         exit(EXIT_FAILURE);
@@ -1180,11 +1210,13 @@ int main(){
         exit(EXIT_FAILURE);
     }
 
+    //relaciona o endereço
     memset(&endereco_servidor, 0, sizeof(endereco_servidor));
     endereco_servidor.sin_family = AF_INET;
     endereco_servidor.sin_port = htons(PORT);
     endereco_servidor.sin_addr.s_addr = INADDR_ANY;
 
+    //ativa o socket 
     status = bind(socketServidor, (struct sockaddr*)&endereco_servidor, sizeof(struct sockaddr));
 
     if(status < 0){
@@ -1192,6 +1224,7 @@ int main(){
         exit(EXIT_FAILURE);
     }
 
+    //espera outros sockets conectarem
     status = listen(socketServidor, limite_clientes);
 
     if(status < 0){
@@ -1200,6 +1233,7 @@ int main(){
     }
 
     pthread_t threadLimpeza;
+    //cria a thread de limpeza
     if (pthread_create(&threadLimpeza, NULL, rotinaLimpezaTrechos, NULL) != 0) {
         log_mensagem(LOG_ERROR, "Falha ao criar a thread de limpeza: %m");
     } else {
@@ -1215,6 +1249,7 @@ int main(){
 
     int i = 0;
     while (1){
+        //função para aceitar a conexão de outros sockets
         socketCliente = accept(socketServidor, (struct sockaddr*)&endereco_conexao, &tamanho_endereco);
         if(socketCliente < 0){
             log_mensagem(LOG_ERROR, "Falha ao criar o socket do servidor: %m");
@@ -1226,6 +1261,7 @@ int main(){
         int *novo_sock = malloc(sizeof(int));
         *novo_sock = socketCliente;
         pthread_t threadID;
+        //cria e coloca a thread para cuidar do socket que chegou (cliente ou motorista)
         if ((pthread_create(&threadID, NULL, rotinaTratamento, novo_sock)) != 0){
             log_mensagem(LOG_ERROR, "Falha ao criar a thread para o cliente: %m");
             free(novo_sock);
@@ -1235,7 +1271,7 @@ int main(){
         }
         i++;
     }
-    
+    //fecha o socket do servidor
     close(socketServidor);
     pthread_mutex_destroy(&logMutex);
     return 0;

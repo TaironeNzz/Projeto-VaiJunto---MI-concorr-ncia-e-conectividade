@@ -12,10 +12,10 @@
 #include "formatos.h"
 
 #define PORT 65432
-
+//função para a requisição de cadastrar
 void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int escolha){
     cJSON *enviar_dados = cJSON_CreateObject();
-    
+    //monta o cjson para a requisição
     cJSON_AddStringToObject(enviar_dados, "classe", "Motorista");
     cJSON_AddStringToObject(enviar_dados, "nome", nome ? nome : "");
     cJSON_AddStringToObject(enviar_dados, "email", email ? email : "");
@@ -27,9 +27,9 @@ void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int
     } else if (escolha == 2) {
         cJSON_AddStringToObject(enviar_dados, "acao", "cadastro");
     }
-
+    //transforma a requisição em string
     char *mensagem = cJSON_PrintUnformatted(enviar_dados);
-    
+    //envia a requisição para o servidor
     if (mensagem != NULL) {
         write(socketCliente, mensagem, strlen(mensagem));
         free(mensagem);
@@ -37,6 +37,7 @@ void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int
     cJSON_Delete(enviar_dados);
 }
 
+//função para enviar uma requisição de cadastrar trecho
 void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     char buffer_mensagem[256] = {0};
     char origem[50], destino[50];
@@ -69,6 +70,7 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
         printf("email inválido!\n");
         return;
     }
+    //monta o cjson para a requisição
     cJSON_AddStringToObject(trecho, "classe", "Motorista");
     cJSON_AddStringToObject(trecho, "acao", "cadastrar_trecho");
     cJSON_AddStringToObject(trecho, "emailMotorista", email);
@@ -82,7 +84,7 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     cJSON_AddItemToObject(trecho, "clientes", arrayClientes);
 
     char *mensagem = cJSON_PrintUnformatted(trecho);
-    
+    //envia a requisição
     if (mensagem != NULL) {
         write(socketMotorista, mensagem, strlen(mensagem));
         free(mensagem);
@@ -100,6 +102,7 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     }
 }
 
+//função para cadastrar n trechos
 void cadastrarTrechos(int socketMotorista, Motorista *motorista) {
     int quantidade;
     printf("Digite a quantidade de trechos que deseja cadastrar: ");
@@ -111,6 +114,7 @@ void cadastrarTrechos(int socketMotorista, Motorista *motorista) {
     }
 }
 
+//função para fazer uma requisição para listar os trechos do motorista
 void listarTrechos(int socketMotorista, Motorista *motorista){
     char buffer_mensagem[4096] = {0};
     int total = 0;
@@ -170,6 +174,7 @@ void listarTrechos(int socketMotorista, Motorista *motorista){
     cJSON_Delete(arrayResposta);
 }
 
+//função para a requisição de cancelar um trecho do motorista
 void cancelarTrecho(int socketMotorista, Motorista *motorista){
     listarTrechos(socketMotorista, motorista);
 
@@ -208,6 +213,7 @@ void cancelarTrecho(int socketMotorista, Motorista *motorista){
     }
 }
 
+//requisição para cadastrar uma rota do motorista
 void cadastrarRotaMotorista(int socketMotorista, Motorista *motorista){
     cJSON *arrayTrechos = cJSON_CreateArray();
     if (arrayTrechos == NULL) { printf("Erro ao criar objeto JSON\n"); return; }
@@ -252,6 +258,7 @@ void cadastrarRotaMotorista(int socketMotorista, Motorista *motorista){
         printf("Digite o preco do trecho: ");
         scanf("%f", &preco);
 
+        //monta o cjson do trecho para a requisição
         cJSON *trecho = cJSON_CreateObject();
         cJSON_AddStringToObject(trecho, "origem", origem);
         cJSON_AddStringToObject(trecho, "destino", destino);
@@ -261,6 +268,7 @@ void cadastrarRotaMotorista(int socketMotorista, Motorista *motorista){
         cJSON_AddStringToObject(trecho, "hora", hora);
         cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
         cJSON_AddNumberToObject(trecho, "preco", preco);
+        //adiciona o cjson no array cjson
         cJSON_AddItemToArray(arrayTrechos, trecho);
 
         strncpy(destinoAnterior, destino, sizeof(destinoAnterior) - 1);
@@ -278,14 +286,15 @@ void cadastrarRotaMotorista(int socketMotorista, Motorista *motorista){
             printf("Digite uma opcao valida!\n");
         }
     }
-
+    //criar um cjson final que contem o array de trechos da rota para a requisiçao
     cJSON *pedido = cJSON_CreateObject();
     cJSON_AddStringToObject(pedido, "classe", "Motorista");
     cJSON_AddStringToObject(pedido, "acao", "cadastrar_rota");
     cJSON_AddStringToObject(pedido, "nome", motorista->nome);
     cJSON_AddItemToObject(pedido, "trechos", arrayTrechos);
-
+    //transforma em string
     char *mensagem = cJSON_PrintUnformatted(pedido);
+    //envia a requisição para o servidor
     if (mensagem != NULL) {
         write(socketMotorista, mensagem, strlen(mensagem));
         free(mensagem);
@@ -514,13 +523,13 @@ int main(){
     char buffer_mensagem[81] = {0};
     
     Motorista *motorista = calloc(1, sizeof(Motorista));
-
+    //cria o socket do motorista
     if ((socketMotorista = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         perror("Socket nao criado");
         free(motorista);
         exit(EXIT_FAILURE);
     }
-
+    //relaciona o endereço
     memset(&endereco_servidor, 0, sizeof(endereco_servidor));
     endereco_servidor.sin_family = AF_INET;
     endereco_servidor.sin_port = htons(PORT);
@@ -539,7 +548,7 @@ int main(){
     }
 
     memcpy(&endereco_servidor.sin_addr, host->h_addr_list[0], host->h_length);
-
+    //conecta ao servidor
     int status = connect(socketMotorista, (struct sockaddr*)&endereco_servidor, sizeof(endereco_servidor));
 
     if (status < 0){

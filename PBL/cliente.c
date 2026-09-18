@@ -13,9 +13,10 @@
 
 #define PORT 65432
 
+//Função para enviar a requisição de cadastrar
 void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int escolha){
     cJSON *enviar_dados = cJSON_CreateObject();
-    
+    //Cria o pacote cJSON para a requisição
     cJSON_AddStringToObject(enviar_dados, "classe", "Cliente");
     cJSON_AddStringToObject(enviar_dados, "nome", nome ? nome : "");
     cJSON_AddStringToObject(enviar_dados, "email", email ? email : "");
@@ -27,9 +28,9 @@ void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int
     } else if (escolha == 2) {
         cJSON_AddStringToObject(enviar_dados, "acao", "cadastro");
     }
-
+    //transforma o cJSON em string
     char *mensagem = cJSON_PrintUnformatted(enviar_dados);
-    
+    //envia a string para o servidor
     if (mensagem != NULL) {
         write(socketCliente, mensagem, strlen(mensagem));
         free(mensagem);
@@ -37,6 +38,7 @@ void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int
     cJSON_Delete(enviar_dados);
 }
 
+//Função para o cliente selecionar os trechos para a rota até a cidade destino
 void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino, char *data, char *hora) {
     char buffer_mensagem[1024] = {0};
     cJSON *arrayRotas = cJSON_CreateArray();
@@ -50,12 +52,13 @@ void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino,
     while (!sair) {
         int total = 0;
         memset(buffer_mensagem, 0, sizeof(buffer_mensagem));
-
+        //Cria o pacote cJSON para a requisição
         cJSON *pedido = cJSON_CreateObject();
         cJSON_AddStringToObject(pedido, "classe", "Cliente");
         cJSON_AddStringToObject(pedido, "acao", "buscar_trechos_partida");
         cJSON_AddStringToObject(pedido, "origem", origemAtual);
         char *mensagem = cJSON_PrintUnformatted(pedido);
+        //enviar a requisição para o servidor
         if (mensagem != NULL) { write(socketCliente, mensagem, strlen(mensagem)); free(mensagem); }
         cJSON_Delete(pedido);
 
@@ -79,6 +82,7 @@ void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino,
             cJSON_Delete(arrayResposta); cJSON_Delete(arrayRotas);
             return;
         }
+        //lista as possiveis caronas
         for (int i = 0; i < n; i++) {
             cJSON *item = cJSON_GetArrayItem(arrayResposta, i);
             int id = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "id"));
@@ -109,7 +113,7 @@ void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino,
         scanf(" %49[^\n]", origemEscolhida);
         printf("Confirme o destino exato do trecho escolhido: ");
         scanf(" %49[^\n]", destinoEscolhido);
-
+        //Cria o cJSON para enviar a requisição
         cJSON *respostaSelecionada = cJSON_CreateObject();
         cJSON_AddStringToObject(respostaSelecionada, "classe", "Cliente");
         cJSON_AddStringToObject(respostaSelecionada, "acao", "selecionar_trecho");
@@ -118,6 +122,7 @@ void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino,
         cJSON_AddStringToObject(respostaSelecionada, "origem", origemEscolhida);
         cJSON_AddStringToObject(respostaSelecionada, "destino", destinoEscolhido);
         char *mensagemSel = cJSON_PrintUnformatted(respostaSelecionada);
+        //envia a requisição
         if (mensagemSel != NULL) { write(socketCliente, mensagemSel, strlen(mensagemSel)); free(mensagemSel); }
         cJSON_Delete(respostaSelecionada);
 
@@ -143,7 +148,7 @@ void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino,
             }
         }
     }
-
+    //envia a requisição final com os trechos selecionados
     cJSON *respostaFinalizar = cJSON_CreateObject();
     cJSON_AddStringToObject(respostaFinalizar, "classe", "Cliente");
     cJSON_AddStringToObject(respostaFinalizar, "email", cliente->email);
@@ -162,6 +167,7 @@ void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino,
     }
 }
 
+//função para buscar as caronas disponiveis 
 void buscarCarona(int socketCliente, Cliente *cliente) {
     char buffer_mensagem[1024] = {0};
     char origem[50], destino[50];
@@ -292,6 +298,7 @@ void buscarCarona(int socketCliente, Cliente *cliente) {
 
 }
 
+//função para mostrar as caronas que o cliente reservou
 void ver_caronas(int socketCliente, Cliente *cliente){
     char buffer_mensagem[4096] = {0};
     int total = 0;
@@ -356,6 +363,7 @@ void ver_caronas(int socketCliente, Cliente *cliente){
     cJSON_Delete(arrayResposta);
 }
 
+//função para cancelar uma carona do cliente
 void cancelar_carona(int socketCliente, Cliente *cliente){
     char buffer_mensagem[4096] = {0};
     int total = 0;
@@ -634,13 +642,13 @@ int main(){
     char ip_servidor[100];
     
     Cliente *cliente = calloc(1, sizeof(Cliente));
-
+    //cria o socket do cliente
     if ((socketCliente = socket(AF_INET, SOCK_STREAM, 0)) < 0){
         perror("Socket nao criado");
         free(cliente);
         exit(EXIT_FAILURE);
     }
-
+    //relaciona os endereços
     memset(&endereco_servidor, 0, sizeof(endereco_servidor));
     endereco_servidor.sin_family = AF_INET;
     endereco_servidor.sin_port = htons(PORT);
@@ -657,7 +665,7 @@ int main(){
     }
 
     memcpy(&endereco_servidor.sin_addr, host->h_addr_list[0], host->h_length);
-
+    //conecta com o servidor
     int status = connect(socketCliente, (struct sockaddr*)&endereco_servidor, sizeof(endereco_servidor));
 
     if (status < 0){
