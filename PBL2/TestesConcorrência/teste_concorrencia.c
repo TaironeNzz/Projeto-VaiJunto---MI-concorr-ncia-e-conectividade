@@ -14,35 +14,62 @@
  * (cadastro, reserva, cancelamento, etc.) o mais proximo possivel do
  * mesmo instante, maximizando a chance de expor uma condicao de corrida.
  *
+ * ARMAZENAMENTO DOS TRECHOS (como o servidor funciona agora):
+ *   - cada trecho fica no seu proprio arquivo
+ *       trechosCadastrados/trecho<ID>.json
+ *     protegido por um mutex proprio (um mutex por trecho);
+ *   - o proximo ID fica em ArquivoID/id.txt e o contador de trechos
+ *     cadastrados em ArquivoID/contadorTrechos.txt (+1 ao cadastrar,
+ *     -1 ao cancelar/expirar).
+ *
+ * VERIFICACAO DOS ARQUIVOS (opcional):
+ *   Os testes funcionam so pelo protocolo (socket), entao rodam contra
+ *   qualquer servidor. Se o teste for executado NA MESMA MAQUINA do
+ *   servidor, ele tambem confere os arquivos acima (informe a pasta onde
+ *   o servidor roda, a que contem ArquivoID/ e trechosCadastrados/).
+ *   Se a pasta nao for acessivel, essas conferencias sao puladas.
+ *
  * TESTES INCLUIDOS:
  *   1) Cadastro concorrente do MESMO email de cliente
  *        -> so pode haver 1 CADASTRO_REALIZADO
  *   2) Reserva concorrente da MESMA carona (capacidade limitada)
  *        -> numero de CARONA_RESERVADA nao pode passar da capacidade
+ *        -> (arquivos) capacidade e clientes gravados batem com as respostas
  *   3) Cancelamento concorrente da MESMA reserva
  *        -> so uma das duas tentativas pode ter sucesso
+ *        -> (arquivos) a capacidade do trecho so sobe 1 vez
  *   4) Cadastro concorrente de trechos por varios motoristas
- *        -> os IDs de trecho gerados (contador global idTrecho) nao
- *           podem se repetir
+ *        -> os IDs de trecho gerados nao podem se repetir
+ *        -> (arquivos) id.txt e contadorTrechos.txt sobem N, e cada
+ *           trecho tem o seu arquivo
  *   5) Cadastro concorrente do MESMO email de motorista
  *        -> mesma ideia do teste 1, agora para a classe Motorista
  *   6) Reservas simultaneas em VARIOS trechos DIFERENTES
  *        -> nao deve haver contencao/deadlock quando nao ha disputa
- *           pelo mesmo recurso; mede o tempo total gasto
+ *           pelo mesmo recurso (mutex por trecho); mede o tempo total
  *   7) Leituras (listar_trechos) concorrentes com escritas
- *      (cadastrar_trecho) no MESMO arquivo trechos.json
+ *      (cadastrar_trecho) em varios arquivos de trecho
  *        -> nenhuma leitura pode vir corrompida/parcial
  *   8) Motorista cancelando um trecho x Cliente reservando o MESMO
- *      trecho, ao mesmo tempo
- *        -> diagnostico: o servidor nao pode travar nem devolver
- *           lixo; ajuda a flagrar reservas "orfas"
+ *      trecho, ao mesmo tempo (varias rodadas)
+ *        -> como os dois usam o mutex do trecho, o resultado e sempre
+ *           consistente: se a reserva venceu, o cliente DEVE receber o
+ *           aviso de trecho removido (sem reserva "orfa")
+ *   9) Cancelamento concorrente do MESMO trecho pelo motorista
+ *        -> so um TRECHO_CANCELADO; (arquivos) arquivo removido e
+ *           contador decrementado uma unica vez
+ *  10) Cadastro concorrente de ROTAS (varios trechos por rota)
+ *        -> os ids de cada rota sao reservados em bloco (consecutivos) e
+ *           nunca se repetem entre rotas
  *
  * Compilar:
  *   gcc -Wall -O2 -o teste_concorrencia teste_concorrencia.c -lpthread
  *
  * Executar (servidor precisa estar rodando):
- *   ./teste_concorrencia 127.0.0.1
- *   (se o IP nao for passado como argumento, o programa pergunta)
+ *   ./teste_concorrencia <ip> [pasta_do_servidor]
+ *   ex.: ./teste_concorrencia 127.0.0.1 ../servidor
+ *   (se o IP nao for passado como argumento, o programa pergunta;
+ *    se a pasta nao for passada, usa a pasta atual ".")
  * ---------------------------------------------------------------------
  */
 
@@ -62,6 +89,7 @@
 #define TAM_BUFFER 4096
 
 char ip_servidor[100] = {0};
+char dir_servidor[256] = ".";  /* pasta onde o servidor roda (para conferir os arquivos) */
 
 /* ======================================================================
  *  Funcoes utilitarias de rede / parsing
@@ -116,6 +144,77 @@ int extrair_int(const char *texto, const char *chave) {
     const char *p = strstr(texto, alvo);
     if (p == NULL) return -1;
     return atoi(p + strlen(alvo));
+}
+
+/* ======================================================================
+ *  Verificacao dos arquivos do servidor (so funciona se o teste roda na
+ *  mesma maquina do servidor e dir_servidor aponta para a pasta dele)
+ * ====================================================================== */
+
+/* 1 se a pasta do servidor esta acessivel (ArquivoID/id.txt legivel) */
+int arquivos_acessiveis(void) {
+    char caminho[512];
+    snprintf(caminho, sizeof(caminho), "%s/ArquivoID/id.txt", dir_servidor);
+    return access(caminho, R_OK) == 0;
+}
+
+/* Le o inteiro de um arquivo (caminho relativo a pasta do servidor). -1 se falhar. */
+int ler_int_arquivo(const char *relativo) {
+    char caminho[512];
+    snprintf(caminho, sizeof(caminho), "%s/%s", dir_servidor, relativo);
+    FILE *f = fopen(caminho, "r");
+    if (f == NULL) return -1;
+    int valor = -1;
+    if (fscanf(f, "%d", &valor) != 1) valor = -1;
+    fclose(f);
+    return valor;
+}
+
+int arquivo_trecho_existe(int id) {
+    char caminho[512];
+    snprintf(caminho, sizeof(caminho), "%s/trechosCadastrados/trecho%d.json", dir_servidor, id);
+    return access(caminho, F_OK) == 0;
+}
+
+/* Copia o conteudo de trechosCadastrados/trecho<ID>.json para buf. Retorna 1 se leu. */
+int ler_arquivo_trecho(int id, char *buf, size_t tam) {
+    char caminho[512];
+    snprintf(caminho, sizeof(caminho), "%s/trechosCadastrados/trecho%d.json", dir_servidor, id);
+    FILE *f = fopen(caminho, "r");
+    if (f == NULL) return 0;
+    size_t n = fread(buf, 1, tam - 1, f);
+    buf[n] = '\0';
+    fclose(f);
+    return 1;
+}
+
+/* Capacidade gravada no arquivo do trecho, ou -1 se nao for possivel ler. */
+int capacidade_arquivo(int id) {
+    if (!arquivos_acessiveis()) return -1;
+    char conteudo[TAM_BUFFER];
+    if (!ler_arquivo_trecho(id, conteudo, sizeof(conteudo))) return -1;
+    return extrair_int(conteudo, "capacidade");
+}
+
+int contar_ocorrencias(const char *texto, const char *trecho) {
+    int total = 0;
+    size_t len = strlen(trecho);
+    for (const char *p = strstr(texto, trecho); p != NULL; p = strstr(p + len, trecho))
+        total++;
+    return total;
+}
+
+/* Extrai todos os valores de "id":N de um array JSON (resposta do listar_trechos). */
+int extrair_todos_ids(const char *texto, int *ids, int max) {
+    int n = 0;
+    const char *chave = "\"id\":";
+    for (const char *p = strstr(texto, chave); p != NULL && n < max; p = strstr(p + strlen(chave), chave))
+        ids[n++] = atoi(p + strlen(chave));
+    return n;
+}
+
+void aviso_arquivos_pulados(void) {
+    printf("(conferencia dos arquivos pulada: pasta do servidor nao acessivel em '%s')\n", dir_servidor);
 }
 
 void email_unico(char *destino, size_t tamanho, const char *prefixo) {
@@ -380,6 +479,24 @@ void teste2_reserva_concorrente(int *idCaronaOut, char *emailClienteReservadoOut
                "(possivel condicao de corrida ao decrementar 'capacidade').\n",
                CAPACIDADE_TESTE2, totalReservada);
 
+    if (arquivos_acessiveis()) {
+        char conteudo[TAM_BUFFER];
+        if (ler_arquivo_trecho(id, conteudo, sizeof(conteudo))) {
+            int capArquivo = extrair_int(conteudo, "capacidade");
+            int clientesArquivo = contar_ocorrencias(conteudo, "cliente_reserva_");
+            printf("Arquivo trecho%d.json: capacidade = %d | clientes gravados = %d\n",
+                   id, capArquivo, clientesArquivo);
+            if (capArquivo == CAPACIDADE_TESTE2 - totalReservada && clientesArquivo == totalReservada)
+                printf(">>> PASSOU (arquivos): o arquivo do trecho bate com as respostas do servidor.\n");
+            else
+                printf(">>> FALHOU (arquivos): esperava capacidade %d e %d cliente(s) gravado(s).\n",
+                       CAPACIDADE_TESTE2 - totalReservada, totalReservada);
+        } else {
+            printf(">>> FALHOU (arquivos): arquivo trechosCadastrados/trecho%d.json nao encontrado.\n", id);
+        }
+    } else {
+        aviso_arquivos_pulados();
+    }
     *idCaronaOut = id;
     if (primeiroReservadoIdx >= 0)
         strncpy(emailClienteReservadoOut, args[primeiroReservadoIdx].emailCliente, tam - 1);
@@ -441,6 +558,8 @@ void teste3_cancelamento_concorrente(int idCarona, const char *emailCliente) {
     pthread_barrier_t barreira;
     pthread_barrier_init(&barreira, NULL, N);
 
+    int capAntes = capacidade_arquivo(idCarona);
+
     for (int i = 0; i < N; i++) {
         memset(&args[i], 0, sizeof(ArgTeste3));
         args[i].barreira = &barreira;
@@ -472,12 +591,22 @@ void teste3_cancelamento_concorrente(int idCarona, const char *emailCliente) {
         printf(">>> FALHOU: esperava 1 cancelamento e 1 'nao encontrado' "
                "(possivel condicao de corrida / cancelamento duplicado).\n");
 
+    if (capAntes >= 0) {
+        int capDepois = capacidade_arquivo(idCarona);
+        printf("Capacidade no arquivo do trecho %d: %d -> %d\n", idCarona, capAntes, capDepois);
+        if (capDepois == capAntes + 1)
+            printf(">>> PASSOU (arquivos): a capacidade subiu apenas 1 vez.\n");
+        else
+            printf(">>> FALHOU (arquivos): a capacidade deveria subir exatamente 1 (cancelamento duplicado?).\n");
+    } else {
+        aviso_arquivos_pulados();
+    }
     pthread_barrier_destroy(&barreira);
 }
 
 /* ======================================================================
  *  TESTE 4 - Cadastro concorrente de trechos por varios motoristas
- *            (o contador global idTrecho nao pode gerar IDs repetidos)
+ *            (o id reservado em ArquivoID/id.txt nao pode gerar IDs repetidos)
  * ====================================================================== */
 
 #define N_TESTE4 12
@@ -549,6 +678,9 @@ void teste4_cadastro_trechos_concorrente(void) {
     pthread_barrier_t barreira;
     pthread_barrier_init(&barreira, NULL, N_TESTE4);
 
+    int idAntes = ler_int_arquivo("ArquivoID/id.txt");
+    int contAntes = ler_int_arquivo("ArquivoID/contadorTrechos.txt");
+
     for (int i = 0; i < N_TESTE4; i++) {
         memset(&args[i], 0, sizeof(ArgTeste4));
         args[i].barreira = &barreira;
@@ -586,8 +718,23 @@ void teste4_cadastro_trechos_concorrente(void) {
         printf(">>> PASSOU: todos os trechos foram cadastrados com IDs unicos.\n");
     else
         printf(">>> FALHOU: era esperado %d cadastros com IDs unicos e sem erros "
-               "(possivel condicao de corrida no contador global idTrecho).\n", N_TESTE4);
+               "(possivel condicao de corrida na reserva de ids do servidor).\n", N_TESTE4);
 
+    if (arquivos_acessiveis()) {
+        int idDepois = ler_int_arquivo("ArquivoID/id.txt");
+        int contDepois = ler_int_arquivo("ArquivoID/contadorTrechos.txt");
+        int semArquivo = 0;
+        for (int i = 0; i < totalValidos; i++)
+            if (!arquivo_trecho_existe(idsValidos[i])) semArquivo++;
+        printf("Arquivos: id.txt %d -> %d | contadorTrechos.txt %d -> %d | trechos sem arquivo proprio: %d\n",
+               idAntes, idDepois, contAntes, contDepois, semArquivo);
+        if (idDepois - idAntes == N_TESTE4 && contDepois - contAntes == N_TESTE4 && semArquivo == 0)
+            printf(">>> PASSOU (arquivos): id e contador subiram %d e cada trecho tem o seu arquivo.\n", N_TESTE4);
+        else
+            printf(">>> FALHOU (arquivos): esperava id e contador +%d e um arquivo por trecho.\n", N_TESTE4);
+    } else {
+        aviso_arquivos_pulados();
+    }
     pthread_barrier_destroy(&barreira);
 }
 
@@ -788,8 +935,8 @@ void teste6_trechos_diferentes_simultaneos(void) {
 
 /* ======================================================================
  *  TESTE 7 - Leitura concorrente (listar_trechos) enquanto outros
- *            motoristas ESCREVEM (cadastram trechos novos) no mesmo
- *            arquivo trechos.json ao mesmo tempo
+ *            motoristas ESCREVEM (cadastram trechos novos) ao mesmo
+ *            tempo (cada trecho e gravado no seu proprio arquivo)
  * ====================================================================== */
 
 #define N_LEITORES_TESTE7 5
@@ -870,7 +1017,7 @@ void *thread_escritor_teste7(void *arg) {
 }
 
 void teste7_leitura_escrita_concorrente(void) {
-    imprimir_titulo("TESTE 7: Leituras concorrentes durante escritas no mesmo arquivo (trechos.json)");
+    imprimir_titulo("TESTE 7: Leituras concorrentes durante escritas em arquivos de trechos");
 
     char emailMotoristaBase[80], erro[256] = {0};
     email_unico(emailMotoristaBase, sizeof(emailMotoristaBase), "motorista_leitor_base");
@@ -929,7 +1076,7 @@ void teste7_leitura_escrita_concorrente(void) {
         printf(">>> PASSOU: nenhuma leitura recebeu resposta corrompida durante as escritas simultaneas.\n");
     else
         printf(">>> FALHOU: houve leitura(s) corrompida(s) ou escrita(s) que falharam sob concorrencia "
-               "(possivel corrupcao de trechos.json).\n");
+               "(possivel corrupcao dos arquivos de trechos).\n");
 
     pthread_barrier_destroy(&barreira);
 }
@@ -1000,66 +1147,367 @@ void *thread_reserva_teste8(void *arg) {
     return NULL;
 }
 
+/* Consulta os avisos de trecho removido de um cliente (listar_avisos). */
+void consultar_avisos(const char *emailCliente, char *buffer, size_t tam) {
+    char msg[512];
+    buffer[0] = '\0';
+    int sock = conectar();
+    if (sock < 0) return;
+    snprintf(msg, sizeof(msg),
+        "{\"classe\":\"Cliente\",\"acao\":\"listar_avisos\",\"email\":\"%s\"}", emailCliente);
+    enviar(sock, msg);
+    receber(sock, buffer, (int)tam);
+    close(sock);
+}
+
+#define RODADAS_TESTE8 10
+
 void teste8_cancelar_trecho_vs_reservar(void) {
     imprimir_titulo("TESTE 8: Motorista cancelando o trecho x Cliente reservando o MESMO trecho");
 
+    int reservaVenceu = 0, cancelVenceu = 0, inconsistencias = 0, errosPrep = 0;
+
+    for (int rodada = 1; rodada <= RODADAS_TESTE8; rodada++) {
+        char emailMotorista[80], erro[256] = {0};
+        email_unico(emailMotorista, sizeof(emailMotorista), "motorista_corrida_cancel");
+        int id = cadastrar_trecho_para_teste(emailMotorista, "MotoristaCorridaCancel",
+                                              "Feira_de_Santana", "Salvador", 1, 40.0f,
+                                              erro, sizeof(erro));
+        if (id < 0) {
+            printf("  rodada %d: ERRO DE PREPARACAO: %s\n", rodada, erro);
+            errosPrep++;
+            continue;
+        }
+
+        pthread_barrier_t barreira;
+        pthread_barrier_init(&barreira, NULL, 2);
+
+        pthread_t tCancela, tReserva;
+        ArgCancelaTeste8 argCancela;
+        ArgReservaTeste8 argReserva;
+        memset(&argCancela, 0, sizeof(argCancela));
+        memset(&argReserva, 0, sizeof(argReserva));
+
+        argCancela.barreira = &barreira;
+        snprintf(argCancela.emailMotorista, sizeof(argCancela.emailMotorista), "%s", emailMotorista);
+        snprintf(argCancela.nomeMotorista, sizeof(argCancela.nomeMotorista), "MotoristaCorridaCancel");
+        argCancela.idTrecho = id;
+
+        argReserva.barreira = &barreira;
+        email_unico(argReserva.emailCliente, sizeof(argReserva.emailCliente), "cliente_corrida_cancel");
+        argReserva.idTrecho = id;
+
+        pthread_create(&tCancela, NULL, thread_cancela_teste8, &argCancela);
+        pthread_create(&tReserva, NULL, thread_reserva_teste8, &argReserva);
+        pthread_join(tCancela, NULL);
+        pthread_join(tReserva, NULL);
+        pthread_barrier_destroy(&barreira);
+
+        /* O mutex do trecho serializa as duas operacoes. So existem 2 desfechos validos:
+         *   (a) reserva primeiro: CARONA_RESERVADA + TRECHO_CANCELADO  -> cliente recebe aviso
+         *   (b) cancelamento primeiro: TRECHO_NAO_ENCONTRADO + TRECHO_CANCELADO -> sem aviso */
+        int cancelOk = strcmp(argCancela.resposta, "TRECHO_CANCELADO") == 0;
+        int reservaOk = strcmp(argReserva.resposta, "CARONA_RESERVADA") == 0;
+        int reservaNaoEnc = strcmp(argReserva.resposta, "TRECHO_NAO_ENCONTRADO") == 0;
+
+        if (!cancelOk || (!reservaOk && !reservaNaoEnc)) {
+            printf("  rodada %d (trecho %d): respostas inesperadas -> cancelamento='%s' | reserva='%s'\n",
+                   rodada, id, argCancela.resposta, argReserva.resposta);
+            inconsistencias++;
+            continue;
+        }
+
+        char avisos[TAM_BUFFER];
+        consultar_avisos(argReserva.emailCliente, avisos, sizeof(avisos));
+        int temAviso = (strstr(avisos, "nomeMotorista") != NULL);
+
+        if (reservaOk) {
+            reservaVenceu++;
+            if (!temAviso) {
+                printf("  rodada %d (trecho %d): reserva 'orfa' - cliente reservou, o trecho foi cancelado e NAO recebeu aviso\n",
+                       rodada, id);
+                inconsistencias++;
+            }
+        } else {
+            cancelVenceu++;
+            if (temAviso) {
+                printf("  rodada %d (trecho %d): cliente recebeu aviso sem ter reservado\n", rodada, id);
+                inconsistencias++;
+            }
+        }
+
+        if (arquivos_acessiveis() && arquivo_trecho_existe(id)) {
+            printf("  rodada %d (trecho %d): o arquivo do trecho cancelado ainda existe\n", rodada, id);
+            inconsistencias++;
+        }
+    }
+
+    printf("Resultado: %d rodada(s) | reserva antes do cancelamento: %d | cancelamento antes da reserva: %d | "
+           "inconsistencias: %d | erros de preparacao: %d\n",
+           RODADAS_TESTE8, reservaVenceu, cancelVenceu, inconsistencias, errosPrep);
+
+    if (inconsistencias == 0 && errosPrep == 0)
+        printf(">>> PASSOU: em todas as rodadas o resultado foi consistente (sem reserva orfa).\n");
+    else
+        printf(">>> FALHOU: houve resposta inesperada, reserva orfa ou arquivo que nao foi removido.\n");
+
+    if (reservaVenceu == 0 || cancelVenceu == 0)
+        printf("(obs.: so um dos dois desfechos apareceu nestas rodadas; rode de novo para ver o outro)\n");
+}
+
+/* ======================================================================
+ *  TESTE 9 - Cancelamento concorrente do MESMO trecho pelo motorista
+ *            (so um pode ter sucesso; o contador cai 1 unica vez)
+ * ====================================================================== */
+
+#define N_TESTE9 6
+
+typedef struct {
+    pthread_barrier_t *barreira;
+    char emailMotorista[80];
+    char nomeMotorista[50];
+    int  idTrecho;
+    int  cancelado;
+    int  naoEncontrado;
+    int  outro;
+} ArgTeste9;
+
+void *thread_teste9(void *arg) {
+    ArgTeste9 *a = (ArgTeste9 *)arg;
+    char buffer[TAM_BUFFER];
+    char msg[512];
+
+    int sock = conectar();
+    if (sock < 0) { a->outro = 1; return NULL; }
+
+    snprintf(msg, sizeof(msg),
+        "{\"classe\":\"Motorista\",\"nome\":\"%s\",\"email\":\"%s\",\"idSelecionado\":%d,"
+        "\"acao\":\"cancelar_trecho\"}", a->nomeMotorista, a->emailMotorista, a->idTrecho);
+
+    pthread_barrier_wait(a->barreira);
+
+    enviar(sock, msg);
+    receber(sock, buffer, sizeof(buffer));
+
+    if (strcmp(buffer, "TRECHO_CANCELADO") == 0) a->cancelado = 1;
+    else if (strcmp(buffer, "TRECHO_NAO_ENCONTRADO") == 0) a->naoEncontrado = 1;
+    else a->outro = 1;
+
+    close(sock);
+    return NULL;
+}
+
+void teste9_cancelar_mesmo_trecho(void) {
+    imprimir_titulo("TESTE 9: Cancelamento concorrente do MESMO trecho (motorista)");
+
     char emailMotorista[80], erro[256] = {0};
-    email_unico(emailMotorista, sizeof(emailMotorista), "motorista_corrida_cancel");
-    int id = cadastrar_trecho_para_teste(emailMotorista, "MotoristaCorridaCancel",
-                                          "Feira_de_Santana", "Salvador", 1, 40.0f,
+    email_unico(emailMotorista, sizeof(emailMotorista), "motorista_cancel_conc");
+    int id = cadastrar_trecho_para_teste(emailMotorista, "MotoristaCancelConc",
+                                          "Feira_de_Santana", "Salvador", 2, 18.0f,
                                           erro, sizeof(erro));
     if (id < 0) {
-        printf(">>> ERRO DE PREPARACAO: %s\n>>> Teste 8 abortado.\n", erro);
+        printf(">>> ERRO DE PREPARACAO: %s\n>>> Teste 9 abortado.\n", erro);
         return;
     }
-    printf("Trecho de teste cadastrado com ID = %d (capacidade = 1)\n", id);
+    printf("Trecho cadastrado com ID = %d\n", id);
 
+    int contAntes = arquivos_acessiveis() ? ler_int_arquivo("ArquivoID/contadorTrechos.txt") : -1;
+
+    pthread_t threads[N_TESTE9];
+    ArgTeste9 args[N_TESTE9];
     pthread_barrier_t barreira;
-    pthread_barrier_init(&barreira, NULL, 2);
+    pthread_barrier_init(&barreira, NULL, N_TESTE9);
 
-    pthread_t tCancela, tReserva;
-    ArgCancelaTeste8 argCancela;
-    ArgReservaTeste8 argReserva;
-    memset(&argCancela, 0, sizeof(argCancela));
-    memset(&argReserva, 0, sizeof(argReserva));
+    for (int i = 0; i < N_TESTE9; i++) {
+        memset(&args[i], 0, sizeof(ArgTeste9));
+        args[i].barreira = &barreira;
+        snprintf(args[i].emailMotorista, sizeof(args[i].emailMotorista), "%s", emailMotorista);
+        snprintf(args[i].nomeMotorista, sizeof(args[i].nomeMotorista), "MotoristaCancelConc");
+        args[i].idTrecho = id;
+    }
 
-    argCancela.barreira = &barreira;
-    snprintf(argCancela.emailMotorista, sizeof(argCancela.emailMotorista), "%s", emailMotorista);
-    snprintf(argCancela.nomeMotorista, sizeof(argCancela.nomeMotorista), "MotoristaCorridaCancel");
-    argCancela.idTrecho = id;
+    printf("Disparando %d cancelamentos simultaneos do trecho %d...\n", N_TESTE9, id);
 
-    argReserva.barreira = &barreira;
-    email_unico(argReserva.emailCliente, sizeof(argReserva.emailCliente), "cliente_corrida_cancel");
-    argReserva.idTrecho = id;
+    for (int i = 0; i < N_TESTE9; i++)
+        pthread_create(&threads[i], NULL, thread_teste9, &args[i]);
+    for (int i = 0; i < N_TESTE9; i++)
+        pthread_join(threads[i], NULL);
 
-    printf("Disparando o cancelamento do trecho (motorista) e a reserva (cliente) ao mesmo tempo...\n");
+    int totalCancelado = 0, totalNaoEncontrado = 0, totalOutro = 0;
+    for (int i = 0; i < N_TESTE9; i++) {
+        totalCancelado     += args[i].cancelado;
+        totalNaoEncontrado += args[i].naoEncontrado;
+        totalOutro         += args[i].outro;
+    }
 
-    pthread_create(&tCancela, NULL, thread_cancela_teste8, &argCancela);
-    pthread_create(&tReserva, NULL, thread_reserva_teste8, &argReserva);
-    pthread_join(tCancela, NULL);
-    pthread_join(tReserva, NULL);
+    printf("Resultado: %d cancelado(s) | %d 'nao encontrado' | %d outro/erro\n",
+           totalCancelado, totalNaoEncontrado, totalOutro);
 
-    printf("Resposta do cancelamento (motorista): %s\n", argCancela.resposta);
-    printf("Resposta da reserva (cliente):        %s\n", argReserva.resposta);
-
-    /* Nao ha uma unica ordem "correta" definida para essa corrida - o
-     * importante e que o servidor NUNCA trave, nunca devolva lixo/vazio,
-     * e que os dois resultados sejam logicamente consistentes entre si:
-     *   - se a reserva teve sucesso, o cancelamento so pode ter tido
-     *     sucesso DEPOIS (nao pode ter "sumido" um trecho com reserva
-     *     ativa sem processa-la) - isso o teste nao consegue provar
-     *     sozinho, mas serve de ponto de partida para inspecao manual. */
-    int cancelamentoRespondeu = strcmp(argCancela.resposta, "ERRO_CONEXAO") != 0 && argCancela.resposta[0] != '\0';
-    int reservaRespondeu      = strcmp(argReserva.resposta, "ERRO_CONEXAO") != 0 && argReserva.resposta[0] != '\0';
-
-    if (cancelamentoRespondeu && reservaRespondeu)
-        printf(">>> OK (diagnostico): o servidor respondeu as duas operacoes concorrentes sem travar "
-               "nem corromper a resposta. Confira manualmente se a combinacao acima faz sentido "
-               "(ex.: reserva 'CARONA_RESERVADA' + cancelamento 'TRECHO_CANCELADO' significa que um "
-               "cliente pode ficar com uma reserva 'orfa' de um trecho que o motorista cancelou).\n");
+    if (totalCancelado == 1 && totalNaoEncontrado == N_TESTE9 - 1 && totalOutro == 0)
+        printf(">>> PASSOU: apenas um cancelamento valeu, os demais viram 'nao encontrado'.\n");
     else
-        printf(">>> FALHOU: uma das duas operacoes nao recebeu resposta valida do servidor "
-               "(possivel trava/crash sob essa condicao de corrida).\n");
+        printf(">>> FALHOU: esperava 1 'TRECHO_CANCELADO' e %d 'TRECHO_NAO_ENCONTRADO'.\n", N_TESTE9 - 1);
+
+    if (contAntes >= 0) {
+        int contDepois = ler_int_arquivo("ArquivoID/contadorTrechos.txt");
+        int existe = arquivo_trecho_existe(id);
+        printf("Arquivos: contadorTrechos.txt %d -> %d | arquivo do trecho ainda existe: %s\n",
+               contAntes, contDepois, existe ? "sim" : "nao");
+        if (contDepois == contAntes - 1 && !existe)
+            printf(">>> PASSOU (arquivos): arquivo removido e contador decrementado uma unica vez.\n");
+        else
+            printf(">>> FALHOU (arquivos): esperava contador -1 e arquivo removido.\n");
+    } else {
+        aviso_arquivos_pulados();
+    }
+
+    pthread_barrier_destroy(&barreira);
+}
+
+/* ======================================================================
+ *  TESTE 10 - Cadastro concorrente de ROTAS (varios trechos por rota)
+ *             Cada rota reserva seus ids em bloco: os 2 ids da mesma rota
+ *             devem ser consecutivos e nenhum id pode se repetir entre rotas.
+ *             Usa a ida e a volta CIDADE_A <-> CIDADE_B; o mapa do servidor
+ *             precisa permitir os dois sentidos.
+ * ====================================================================== */
+
+#define N_TESTE10 6
+#define TRECHOS_POR_ROTA 2
+
+typedef struct {
+    pthread_barrier_t *barreira;
+    char emailMotorista[80];
+    char nomeMotorista[50];
+    int  rotaCadastrada;
+    char respostaRota[128];
+    int  ids[8];
+    int  nIds;
+} ArgTeste10;
+
+void *thread_teste10(void *arg) {
+    ArgTeste10 *a = (ArgTeste10 *)arg;
+    char buffer[TAM_BUFFER];
+    char msg[2048];
+
+    int sock = conectar();
+    if (sock < 0) { snprintf(a->respostaRota, sizeof(a->respostaRota), "ERRO_CONEXAO"); return NULL; }
+
+    snprintf(msg, sizeof(msg),
+        "{\"classe\":\"Motorista\",\"nome\":\"%s\",\"email\":\"%s\",\"senha\":\"senha123\","
+        "\"status\":\"\",\"acao\":\"cadastro\"}", a->nomeMotorista, a->emailMotorista);
+    enviar(sock, msg);
+    receber(sock, buffer, sizeof(buffer));
+    if (strcmp(buffer, "CADASTRO_REALIZADO") != 0) {
+        snprintf(a->respostaRota, sizeof(a->respostaRota), "cadastro falhou: %.80s", buffer);
+        close(sock);
+        return NULL;
+    }
+
+    snprintf(msg, sizeof(msg),
+        "{\"classe\":\"Motorista\",\"acao\":\"cadastrar_rota\",\"nome\":\"%s\",\"trechos\":["
+        "{\"origem\":\"Feira_de_Santana\",\"destino\":\"Salvador\",\"data\":\"31/12/2099\",\"hora\":\"08:00\","
+        "\"capacidade\":3,\"preco\":10.0,\"emailMotorista\":\"%s\"},"
+        "{\"origem\":\"Salvador\",\"destino\":\"Feira_de_Santana\",\"data\":\"31/12/2099\",\"hora\":\"12:00\","
+        "\"capacidade\":3,\"preco\":10.0,\"emailMotorista\":\"%s\"}]}",
+        a->nomeMotorista, a->emailMotorista, a->emailMotorista);
+
+    pthread_barrier_wait(a->barreira);
+
+    enviar(sock, msg);
+    receber(sock, buffer, sizeof(buffer));
+    snprintf(a->respostaRota, sizeof(a->respostaRota), "%.120s", buffer);
+    if (strcmp(buffer, "ROTA_CADASTRADA") != 0) {
+        close(sock);
+        return NULL;
+    }
+    a->rotaCadastrada = 1;
+
+    /* descobre os ids que o servidor deu aos trechos da rota */
+    snprintf(msg, sizeof(msg),
+        "{\"classe\":\"Motorista\",\"nome\":\"%s\",\"email\":\"%s\",\"senha\":\"senha123\","
+        "\"acao\":\"listar_trechos\"}", a->nomeMotorista, a->emailMotorista);
+    enviar(sock, msg);
+    receber(sock, buffer, sizeof(buffer));
+    close(sock);
+
+    a->nIds = extrair_todos_ids(buffer, a->ids, 8);
+    return NULL;
+}
+
+void teste10_rotas_concorrentes(void) {
+    imprimir_titulo("TESTE 10: Cadastro concorrente de ROTAS (ids reservados em bloco)");
+
+    pthread_t threads[N_TESTE10];
+    ArgTeste10 args[N_TESTE10];
+    pthread_barrier_t barreira;
+    pthread_barrier_init(&barreira, NULL, N_TESTE10);
+
+    int idAntes = arquivos_acessiveis() ? ler_int_arquivo("ArquivoID/id.txt") : -1;
+    int contAntes = arquivos_acessiveis() ? ler_int_arquivo("ArquivoID/contadorTrechos.txt") : -1;
+
+    for (int i = 0; i < N_TESTE10; i++) {
+        memset(&args[i], 0, sizeof(ArgTeste10));
+        args[i].barreira = &barreira;
+        email_unico(args[i].emailMotorista, sizeof(args[i].emailMotorista), "motorista_rota");
+        snprintf(args[i].nomeMotorista, sizeof(args[i].nomeMotorista), "MotoristaRota%d", i);
+    }
+
+    printf("Disparando %d motoristas cadastrando uma rota de %d trechos cada, ao mesmo tempo...\n",
+           N_TESTE10, TRECHOS_POR_ROTA);
+
+    for (int i = 0; i < N_TESTE10; i++)
+        pthread_create(&threads[i], NULL, thread_teste10, &args[i]);
+    for (int i = 0; i < N_TESTE10; i++)
+        pthread_join(threads[i], NULL);
+
+    int rotasOk = 0, rotasBemFormadas = 0, duplicados = 0;
+    int todosIds[N_TESTE10 * TRECHOS_POR_ROTA];
+    int totalIds = 0;
+    for (int i = 0; i < N_TESTE10; i++) {
+        if (!args[i].rotaCadastrada) {
+            printf("  - motorista %d: rota nao cadastrada (resposta: %s)\n", i, args[i].respostaRota);
+            continue;
+        }
+        rotasOk++;
+        if (args[i].nIds == TRECHOS_POR_ROTA && args[i].ids[1] == args[i].ids[0] + 1) {
+            rotasBemFormadas++;
+            for (int k = 0; k < TRECHOS_POR_ROTA; k++) todosIds[totalIds++] = args[i].ids[k];
+        } else {
+            printf("  - motorista %d: ids da rota fora do esperado (%d id(s) lidos; ids consecutivos esperados)\n",
+                   i, args[i].nIds);
+        }
+    }
+    for (int i = 0; i < totalIds; i++)
+        for (int j = i + 1; j < totalIds; j++)
+            if (todosIds[i] == todosIds[j]) duplicados++;
+
+    printf("Resultado: %d/%d rota(s) cadastrada(s) | %d com ids consecutivos | %d ID(s) duplicado(s)\n",
+           rotasOk, N_TESTE10, rotasBemFormadas, duplicados);
+
+    if (rotasOk == N_TESTE10 && rotasBemFormadas == N_TESTE10 && duplicados == 0)
+        printf(">>> PASSOU: todas as rotas foram gravadas com blocos de ids consecutivos e sem repeticao.\n");
+    else
+        printf(">>> FALHOU: esperava %d rotas, ids consecutivos dentro de cada rota e nenhum id repetido "
+               "(se as rotas foram recusadas, confira se o mapa liga %s <-> %s nos dois sentidos).\n",
+               N_TESTE10, "Feira_de_Santana", "Salvador");
+
+    if (idAntes >= 0) {
+        int total = N_TESTE10 * TRECHOS_POR_ROTA;
+        int idDepois = ler_int_arquivo("ArquivoID/id.txt");
+        int contDepois = ler_int_arquivo("ArquivoID/contadorTrechos.txt");
+        int semArquivo = 0;
+        for (int i = 0; i < totalIds; i++)
+            if (!arquivo_trecho_existe(todosIds[i])) semArquivo++;
+        printf("Arquivos: id.txt %d -> %d | contadorTrechos.txt %d -> %d | trechos sem arquivo proprio: %d\n",
+               idAntes, idDepois, contAntes, contDepois, semArquivo);
+        if (idDepois - idAntes == total && contDepois - contAntes == total && semArquivo == 0)
+            printf(">>> PASSOU (arquivos): id e contador subiram %d e cada trecho tem o seu arquivo.\n", total);
+        else
+            printf(">>> FALHOU (arquivos): esperava id e contador +%d e um arquivo por trecho.\n", total);
+    } else {
+        aviso_arquivos_pulados();
+    }
 
     pthread_barrier_destroy(&barreira);
 }
@@ -1080,8 +1528,17 @@ int main(int argc, char *argv[]) {
             return EXIT_FAILURE;
         }
     }
+    if (argc >= 3) {
+        strncpy(dir_servidor, argv[2], sizeof(dir_servidor) - 1);
+    }
 
     printf("Testes de concorrencia contra o servidor em %s:%d\n", ip_servidor, PORTA);
+    if (arquivos_acessiveis())
+        printf("Pasta do servidor acessivel em '%s': os arquivos de trechos, id e contador tambem serao conferidos.\n",
+               dir_servidor);
+    else
+        printf("Pasta do servidor NAO acessivel em '%s': so as respostas do servidor serao conferidas "
+               "(passe a pasta como 2o argumento para conferir os arquivos).\n", dir_servidor);
 
     teste1_cadastro_concorrente();
 
@@ -1100,6 +1557,10 @@ int main(int argc, char *argv[]) {
     teste7_leitura_escrita_concorrente();
 
     teste8_cancelar_trecho_vs_reservar();
+
+    teste9_cancelar_mesmo_trecho();
+
+    teste10_rotas_concorrentes();
 
     imprimir_titulo("FIM DOS TESTES DE CONCORRENCIA");
     return 0;
