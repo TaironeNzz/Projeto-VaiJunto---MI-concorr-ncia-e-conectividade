@@ -1502,8 +1502,6 @@ int main(){
     int valor_opcao = 1;
     //atualiza o id do trecho
     encontrarID();
-    //passa trechos.json antigo (se existir) para um arquivo por trecho
-    migrarTrechosLegado();
     //acerta o contador conforme os arquivos que existem
     recalcularContadorTrechos();
     mapa = carregarGrafoDeArquivo("mapa.txt");
