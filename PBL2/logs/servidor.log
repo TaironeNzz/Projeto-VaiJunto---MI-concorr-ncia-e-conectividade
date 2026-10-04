@@ -1,0 +1,142 @@
+[2026-10-04 17:46:41] [INFO] Servidor iniciado na porta 65432
+[2026-10-04 17:47:58] [INFO] Servidor iniciado na porta 65432
+[2026-10-04 17:48:31] [INFO] Novo dispositivo conectado. Socket ID: 4
+[2026-10-04 17:48:47] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-10-04 17:49:03] [WARN] Falha de autenticação para o email: paulo@gmail.com
+[2026-10-04 17:49:18] [INFO] Motorista logado - Nome: Marcelo | Email: marcelo@gmail.com
+[2026-10-04 17:49:41] [WARN] Falha de autenticação para o email: joaozin@gmail.com
+[2026-10-04 17:49:51] [INFO] Cliente logado - Nome: Paula | Email: paula@gmail.com
+[2026-10-04 17:49:55] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:49:59] [INFO] Consulta de avisos - Cliente: paula@gmail.com | Avisos enviados: 0
+[2026-10-04 17:50:00] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:50:05] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 17:50:10] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 17:50:47] [INFO] Trecho ID 0 cadastrado por Marcelo (Santa_Barbara -> Feira_de_Santana)
+[2026-10-04 17:51:35] [INFO] Trecho ID 1 cadastrado por Marcelo (Feira_de_Santana -> Salvador)
+[2026-10-04 17:51:51] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 17:52:07] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:52:09] [INFO] Consulta de avisos - Cliente: paula@gmail.com | Avisos enviados: 0
+[2026-10-04 17:52:10] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:52:47] [INFO] Reserva realizada - Cliente: paula@gmail.com | Trecho ID: 0
+[2026-10-04 17:52:54] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:52:57] [INFO] Consulta de avisos - Cliente: paula@gmail.com | Avisos enviados: 0
+[2026-10-04 17:52:59] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:53:27] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 17:54:08] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-10-04 17:54:50] [INFO] Cliente logado - Nome: Ana | Email: ana@gmail.com
+[2026-10-04 17:55:24] [INFO] Reserva realizada - Cliente: ana@gmail.com | Trecho ID: 0
+[2026-10-04 17:55:31] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-04 17:55:35] [INFO] Consulta de avisos - Cliente: ana@gmail.com | Avisos enviados: 0
+[2026-10-04 17:55:46] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:55:48] [INFO] Consulta de avisos - Cliente: paula@gmail.com | Avisos enviados: 0
+[2026-10-04 17:55:50] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:55:56] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-04 17:56:02] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 17:56:13] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-04 17:56:16] [INFO] Reserva cancelada pelo cliente - Cliente: ana@gmail.com | ID Trecho: 0
+[2026-10-04 17:56:19] [INFO] Consulta de avisos - Cliente: ana@gmail.com | Avisos enviados: 0
+[2026-10-04 17:56:22] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-04 17:56:25] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-04 17:56:29] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-04 17:56:34] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:56:37] [INFO] Consulta de avisos - Cliente: paula@gmail.com | Avisos enviados: 0
+[2026-10-04 17:56:38] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:56:46] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 17:57:18] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-04 17:57:20] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-04 17:57:24] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:57:25] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:57:29] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 17:57:36] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 17:58:12] [INFO] Aviso de trecho removido adicionado para 1 cliente(s): Santa_Barbara -> Feira_de_Santana em 20/10/2026 21:00 pelo motorista Marcelo
+[2026-10-04 17:58:12] [INFO] Trecho ID 0 cancelado pelo motorista marcelo@gmail.com
+[2026-10-04 17:58:16] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 17:58:23] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-04 17:58:25] [INFO] Consulta de avisos - Cliente: ana@gmail.com | Avisos enviados: 0
+[2026-10-04 17:58:26] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-04 17:58:28] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-04 17:58:29] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-04 17:58:34] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 17:58:47] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 17:58:58] [INFO] Consulta de avisos - Cliente: paula@gmail.com | Avisos enviados: 1
+[2026-10-04 17:59:06] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:59:07] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:59:09] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:59:09] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 17:59:12] [INFO] Consulta de avisos - Cliente: paula@gmail.com | Avisos enviados: 0
+[2026-10-04 17:59:37] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-10-04 18:00:06] [INFO] Novo dispositivo conectado. Socket ID: 7
+[2026-10-04 18:00:28] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-10-04 18:00:49] [INFO] Trecho ID 2 cadastrado por Lucio (Santa_Barbara -> Feira_de_Santana)
+[2026-10-04 18:00:52] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-10-04 18:00:59] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:02:07] [INFO] Rota finalizada com sucesso (Santa_Barbara -> Salvador)
+[2026-10-04 18:02:16] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-10-04 18:02:20] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:02:25] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:02:53] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:03:00] [INFO] Reserva cancelada pelo cliente - Cliente: paula@gmail.com | ID Trecho: 2
+[2026-10-04 18:03:02] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:03:10] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:03:38] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:03:42] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-10-04 18:03:54] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-10-04 18:04:01] [INFO] Trecho ID 2 cancelado pelo motorista lucio@gmail.com
+[2026-10-04 18:04:05] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-10-04 18:04:07] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-10-04 18:04:13] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-10-04 18:04:17] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:04:18] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:04:20] [INFO] Consulta de avisos - Cliente: paula@gmail.com | Avisos enviados: 0
+[2026-10-04 18:04:21] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:04:25] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:04:28] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:04:30] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:04:35] [INFO] Aviso de trecho removido adicionado para 1 cliente(s): Feira_de_Santana -> Salvador em 20/10/2026 21:30 pelo motorista Marcelo
+[2026-10-04 18:04:35] [INFO] Trecho ID 1 cancelado pelo motorista marcelo@gmail.com
+[2026-10-04 18:04:37] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:04:37] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:04:40] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:04:41] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:04:45] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:04:46] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:04:46] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:04:51] [INFO] Consulta de avisos - Cliente: paula@gmail.com | Avisos enviados: 1
+[2026-10-04 18:05:34] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:05:35] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:05:36] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:05:40] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:05:41] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:05:43] [INFO] Consulta de avisos - Cliente: paula@gmail.com | Avisos enviados: 0
+[2026-10-04 18:06:30] [INFO] Rota (multi-trechos) cadastrada por Marcelo | Total de trechos: 2
+[2026-10-04 18:07:12] [INFO] Dispositivo desconectado. Socket ID: 7
+[2026-10-04 18:07:16] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:08:20] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:08:37] [INFO] Rota finalizada com sucesso (Santa_Barbara -> Salvador)
+[2026-10-04 18:08:41] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:08:45] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:08:57] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:08:58] [INFO] Aviso de trecho removido adicionado para 1 cliente(s): Santa_Barbara -> Feira_de_Santana em 20/10/2026 21:00 pelo motorista Marcelo
+[2026-10-04 18:08:58] [INFO] Trecho ID 3 cancelado pelo motorista marcelo@gmail.com
+[2026-10-04 18:09:02] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:09:04] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:09:06] [INFO] Aviso de trecho removido adicionado para 1 cliente(s): Feira_de_Santana -> Salvador em 20/10/2026 21:30 pelo motorista Marcelo
+[2026-10-04 18:09:06] [INFO] Trecho ID 4 cancelado pelo motorista marcelo@gmail.com
+[2026-10-04 18:09:07] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:09:09] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:09:10] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:09:14] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:09:15] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:09:16] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:09:20] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:09:23] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:09:27] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:09:32] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:09:34] [INFO] Consulta de avisos - Cliente: paula@gmail.com | Avisos enviados: 2
+[2026-10-04 18:09:55] [INFO] Consulta de avisos - Cliente: paula@gmail.com | Avisos enviados: 0
+[2026-10-04 18:09:56] [INFO] Consulta de reservas solicitada - Cliente: paula@gmail.com
+[2026-10-04 18:09:59] [INFO] Dispositivo desconectado. Socket ID: 4
+[2026-10-04 18:10:03] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:10:05] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:10:06] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-04 18:10:09] [INFO] Dispositivo desconectado. Socket ID: 5
