@@ -1,0 +1,860 @@
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <fcntl.h>
+#include "cJSON.h"
+#include <stdio.h>
+#include <string.h>
+#include <stdlib.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+#include <netdb.h>
+#include <signal.h>
+#include "formatos.h"
+
+#define PORT 65432
+
+//Função para enviar a requisição de cadastrar
+void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int escolha){
+    cJSON *enviar_dados = cJSON_CreateObject();
+    //Cria o pacote cJSON para a requisição
+    cJSON_AddStringToObject(enviar_dados, "classe", "Cliente");
+    cJSON_AddStringToObject(enviar_dados, "nome", nome ? nome : "");
+    cJSON_AddStringToObject(enviar_dados, "email", email ? email : "");
+    cJSON_AddStringToObject(enviar_dados, "senha", senha ? senha : "");
+    cJSON_AddStringToObject(enviar_dados, "status", "");
+    
+    if (escolha == 1) {
+        cJSON_AddStringToObject(enviar_dados, "acao", "login");
+    } else if (escolha == 2) {
+        cJSON_AddStringToObject(enviar_dados, "acao", "cadastro");
+    }
+    //transforma o cJSON em string
+    char *mensagem = cJSON_PrintUnformatted(enviar_dados);
+    //envia a string para o servidor
+    if (mensagem != NULL) {
+        write(socketCliente, mensagem, strlen(mensagem));
+        free(mensagem);
+    }
+    cJSON_Delete(enviar_dados);
+}
+
+//Função para o cliente selecionar os trechos para a rota até a cidade destino
+void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino, char *data, char *hora) {
+    char buffer_mensagem[1024] = {0};
+    cJSON *arrayRotas = cJSON_CreateArray();
+    int servidorOffline = 0;
+    if (arrayRotas == NULL) { printf("Erro ao criar objeto JSON\n"); return; }
+
+    char origemAtual[50];
+    strncpy(origemAtual, origem, sizeof(origemAtual) - 1);
+    origemAtual[sizeof(origemAtual) - 1] = '\0';
+
+    int sair = 0;
+    while (!sair) {
+        int total = 0;
+        memset(buffer_mensagem, 0, sizeof(buffer_mensagem));
+        //Cria o pacote cJSON para a requisição
+        cJSON *pedido = cJSON_CreateObject();
+        cJSON_AddStringToObject(pedido, "classe", "Cliente");
+        cJSON_AddStringToObject(pedido, "acao", "buscar_trechos_partida");
+        cJSON_AddStringToObject(pedido, "origem", origemAtual);
+        char *mensagem = cJSON_PrintUnformatted(pedido);
+        //enviar a requisição para o servidor
+        if (mensagem != NULL) { write(socketCliente, mensagem, strlen(mensagem)); free(mensagem); }
+        cJSON_Delete(pedido);
+
+        cJSON *arrayResposta = NULL;
+        while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
+            ssize_t bytes = read(socketCliente, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
+            if (bytes <= 0) {
+                servidorOffline = 1;
+                break;
+            }
+            total += bytes;
+            buffer_mensagem[total] = '\0';
+            arrayResposta = cJSON_Parse(buffer_mensagem);
+        }
+        if (servidorOffline) {
+            printf("O SERVIDOR ESTA OFFLINE\n");
+            printf("Itinerario nao concluido!\n");
+            cJSON_Delete(arrayResposta);
+            cJSON_Delete(arrayRotas);
+            return;
+        }
+        if (arrayResposta == NULL) { printf("Erro ao obter lista de trechos.\n"); cJSON_Delete(arrayRotas); return; }
+
+        int n = cJSON_GetArraySize(arrayResposta);
+        if (n == 0) {
+            printf("NENHUMA CARONA ENCONTRADA PARTINDO DE %s\n", origemAtual);
+            cJSON_Delete(arrayResposta);
+            cJSON_Delete(arrayRotas);
+            return;
+        }
+        printf("=============================================\n");
+        printf("CARONAS DISPONIVEIS PARTINDO DE %s\n", origemAtual);
+        printf("=============================================\n");
+        //lista as possiveis caronas
+        for (int i = 0; i < n; i++) {
+            cJSON *item = cJSON_GetArrayItem(arrayResposta, i);
+            int id = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "id"));
+            char *cOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(item, "origem"));
+            char *cDestino = cJSON_GetStringValue(cJSON_GetObjectItem(item, "destino"));
+            int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "capacidade"));
+            char *dItem = cJSON_GetStringValue(cJSON_GetObjectItem(item, "data"));
+            char *hItem = cJSON_GetStringValue(cJSON_GetObjectItem(item, "hora"));
+            char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(item, "nomeMotorista"));
+            float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "preco"));
+            printf("=============================================\n");
+            printf("ID: %d | Motorista: %s\n", id, nomeMotorista);
+            printf("Origem: %s -> Destino: %s\n", cOrigem, cDestino);
+            printf("Data: %s Hora: %s Capacidade: %d Preco: %.2f\n", dItem, hItem, capacidade, preco);
+        }
+        printf("=============================================\n");
+        cJSON_Delete(arrayResposta);
+
+        printf("Digite o ID do trecho para adicionar a rota (ou -1 para cancelar): ");
+        int idSelecionado;
+        scanf("%d", &idSelecionado);
+        if (idSelecionado == -1) { 
+            cJSON_Delete(arrayRotas);
+            return; 
+        }
+
+        char origemEscolhida[50], destinoEscolhido[50];
+        printf("Confirme a origem exata do trecho escolhido: ");
+        scanf(" %49[^\n]", origemEscolhida);
+        printf("Confirme o destino exato do trecho escolhido: ");
+        scanf(" %49[^\n]", destinoEscolhido);
+        //Cria o cJSON para enviar a requisição
+        cJSON *respostaSelecionada = cJSON_CreateObject();
+        cJSON_AddStringToObject(respostaSelecionada, "classe", "Cliente");
+        cJSON_AddStringToObject(respostaSelecionada, "acao", "selecionar_trecho");
+        cJSON_AddNumberToObject(respostaSelecionada, "idSelecionado", idSelecionado);
+        cJSON_AddStringToObject(respostaSelecionada, "emailCliente", cliente->email);
+        cJSON_AddStringToObject(respostaSelecionada, "nomeCliente", cliente->nome);
+        cJSON_AddStringToObject(respostaSelecionada, "origem", origemEscolhida);
+        cJSON_AddStringToObject(respostaSelecionada, "destino", destinoEscolhido);
+        char *mensagemSel = cJSON_PrintUnformatted(respostaSelecionada);
+        //envia a requisição
+        if (mensagemSel != NULL) { write(socketCliente, mensagemSel, strlen(mensagemSel)); free(mensagemSel); }
+        cJSON_Delete(respostaSelecionada);
+
+        memset(buffer_mensagem, 0, sizeof(buffer_mensagem));
+        int bytes = read(socketCliente, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+        if (bytes > 0) {
+            buffer_mensagem[bytes] = '\0';
+            cJSON *respostaServidor = cJSON_Parse(buffer_mensagem);
+            if (respostaServidor != NULL) {
+                cJSON_AddItemToArray(arrayRotas, respostaServidor);
+                strncpy(origemAtual, destinoEscolhido, sizeof(origemAtual) - 1);
+                origemAtual[sizeof(origemAtual) - 1] = '\0';
+                if (strcmp(origemAtual, destino) == 0) {
+                    printf("Voce chegou ao destino final! Finalizando rota...\n");
+                    sair = 1;
+                } else {
+                    printf("Trecho adicionado! Continuando de %s...\n", origemAtual);
+                }
+            } else if (strcmp(buffer_mensagem, "ASSENTO_INDISPONIVEL") == 0) {
+                printf("Assento indisponivel. Escolha outra carona.\n");
+            } else {
+                printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
+            }
+        } else {
+            printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+            cJSON_Delete(arrayRotas);
+            return;
+        }
+    }
+    //envia a requisição final com os trechos selecionados
+    cJSON *respostaFinalizar = cJSON_CreateObject();
+    cJSON_AddStringToObject(respostaFinalizar, "classe", "Cliente");
+    cJSON_AddStringToObject(respostaFinalizar, "email", cliente->email);
+    cJSON_AddStringToObject(respostaFinalizar, "acao", "finalizar_rota");
+    cJSON_AddItemToObject(respostaFinalizar, "rota", arrayRotas);
+    cJSON_AddStringToObject(respostaFinalizar, "origemRota", origem);
+    cJSON_AddStringToObject(respostaFinalizar, "destinoRota", destino);
+    char *mensagemFinal = cJSON_PrintUnformatted(respostaFinalizar);
+    if (mensagemFinal != NULL) { write(socketCliente, mensagemFinal, strlen(mensagemFinal)); free(mensagemFinal); }
+    cJSON_Delete(respostaFinalizar);
+
+    int bytes = read(socketCliente, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+    if (bytes > 0) {
+        buffer_mensagem[bytes] = '\0';
+        printf(strcmp(buffer_mensagem, "CARONA_CADASTRADA") == 0 ? "Rota cadastrada com sucesso!\n" : "Falha ao finalizar a rota.\n");
+    } else {
+        printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+    }
+}
+
+//função para buscar as caronas disponiveis 
+void buscarCarona(int socketCliente, Cliente *cliente) {
+    char buffer_mensagem[1024] = {0};
+    char origem[50], destino[50];
+    char data[11], hora[6];
+    int total = 0;
+    int servidorOffline = 0;
+
+    printf("Digite a origem da carona: ");
+    scanf(" %49[^\n]", origem);
+    printf("Digite o destino da carona: ");
+    scanf(" %49[^\n]", destino);
+    printf("Digite a data da carona ou digite (dd/mm/aaaa) para qualquer data: ");
+    scanf(" %10[^\n]", data);
+    printf("Digite a hora da carona: ");
+    scanf(" %5[^\n]", hora);
+
+    cJSON *carona = cJSON_CreateObject();
+    cJSON_AddStringToObject(carona, "classe", "Cliente");
+    cJSON_AddStringToObject(carona, "acao", "buscar_carona");
+    cJSON_AddStringToObject(carona, "origem", origem);
+    cJSON_AddStringToObject(carona, "destino", destino);
+    cJSON_AddStringToObject(carona, "data", data);
+    cJSON_AddStringToObject(carona, "hora", hora);
+
+    char *mensagem = cJSON_PrintUnformatted(carona);
+    if (mensagem != NULL) {
+        write(socketCliente, mensagem, strlen(mensagem));
+        free(mensagem);
+    }
+    cJSON_Delete(carona);
+
+    cJSON *arrayResposta = NULL;
+    while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
+        ssize_t bytes = read(socketCliente, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
+        if (bytes <= 0) {
+            servidorOffline = 1;
+            break;
+        }
+        total += bytes;
+        buffer_mensagem[total] = '\0';
+        arrayResposta = cJSON_Parse(buffer_mensagem);
+    }
+
+    if (servidorOffline) {
+        printf("O SERVIDOR ESTA OFFLINE\n");
+        cJSON_Delete(arrayResposta);
+        return;
+    }
+    if (arrayResposta == NULL) {
+        printf("Erro ao obter lista de trechos.\n");
+        return;
+    }
+
+    int n = cJSON_GetArraySize(arrayResposta);
+    if (n == 0) {
+        printf("CARONAS DIRETAS NAO ENCONTRADAS\n");
+        int sair = 0;
+        while(!sair){
+            printf("================================================\n");
+            printf("DESEJA CRIAR UMA ROTA COM MOTORISTAS DIFERENTES?\n");
+            printf("================================================\n");
+            printf(" 1- SIM\n");
+            printf(" 2- NAO\n");
+            printf("====================================\n");
+            printf("Escolha uma opcao: ");
+            int escolha;
+            scanf("%d", &escolha);
+            if (escolha == 1) {
+                criarRota(socketCliente, cliente, origem, destino, data, hora);
+                sair = 1;
+            } else if (escolha == 2) {
+                sair = 1;
+            } else {
+                printf("Opcao invalida. Tente novamente.\n");
+            }
+        }
+        return;
+    }
+    printf("====================================\n");
+    printf("         Caronas encontradas        \n");
+    printf("====================================\n");
+
+    for (int i = 0; i < n; i++) {
+        cJSON *item = cJSON_GetArrayItem(arrayResposta, i);
+        int id = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "id"));
+        char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(item, "origem"));
+        char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(item, "destino"));
+        int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "capacidade"));
+        char *data = cJSON_GetStringValue(cJSON_GetObjectItem(item, "data"));
+        char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(item, "hora"));
+        char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(item, "nomeMotorista"));
+        float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "preco"));
+        printf("====================================\n");
+        printf("ID: %d\n", id);
+        printf("Motorista: %s\n", nomeMotorista);
+        printf("Origem: %s\n", cidadeOrigem);
+        printf("Destino: %s\n", cidadeDestino);
+        printf("Data: %s\n", data);
+        printf("Hora: %s\n", hora);
+        printf("Capacidade: %d\n", capacidade);
+        printf("Preco: %.2f\n", preco);
+    }
+    printf("====================================\n");
+    cJSON_Delete(arrayResposta);
+
+    printf("Selecione a carona desejada pelo ID (ou -1 para voltar): \n");
+    int idSelecionado;
+    scanf("%d", &idSelecionado);
+    if (idSelecionado == -1) return;
+
+    cJSON *respostaSelecionada = cJSON_CreateObject();
+    cJSON_AddStringToObject(respostaSelecionada, "classe", "Cliente");
+    cJSON_AddStringToObject(respostaSelecionada, "acao", "selecionar_carona");
+    cJSON_AddStringToObject(respostaSelecionada, "emailCliente", cliente->email);
+    cJSON_AddStringToObject(respostaSelecionada, "nomeCliente", cliente->nome);
+    cJSON_AddNumberToObject(respostaSelecionada, "idSelecionado", idSelecionado);
+    cJSON_AddStringToObject(respostaSelecionada, "origem", origem);
+    cJSON_AddStringToObject(respostaSelecionada, "destino", destino);
+    char *mensagemSelecionada = cJSON_PrintUnformatted(respostaSelecionada);
+    if (mensagemSelecionada != NULL) {
+        write(socketCliente, mensagemSelecionada, strlen(mensagemSelecionada));
+        free(mensagemSelecionada);
+    }
+    cJSON_Delete(respostaSelecionada);
+
+    int bytes = read(socketCliente, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+    if (bytes > 0) {
+        buffer_mensagem[bytes] = '\0';
+        if (strcmp(buffer_mensagem, "CARONA_RESERVADA") == 0) {
+            printf("Carona reservada com sucesso!\n");
+        } else if (strcmp(buffer_mensagem, "ASSENTO_INDISPONIVEL") == 0) {
+            printf("Assento indisponível. Tente outra carona.\n");
+        } else {
+            printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
+        }
+    } else {
+        printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+    }
+
+}
+
+//função para mostrar as caronas que o cliente reservou
+void ver_caronas(int socketCliente, Cliente *cliente){
+    char buffer_mensagem[4096] = {0};
+    int total = 0;
+    int servidorOffline = 0;
+
+    cJSON *enviar_dados = cJSON_CreateObject();
+    cJSON_AddStringToObject(enviar_dados, "classe", "Cliente");
+    cJSON_AddStringToObject(enviar_dados, "nome", cliente->nome);
+    cJSON_AddStringToObject(enviar_dados, "email", cliente->email);
+    cJSON_AddStringToObject(enviar_dados, "senha", cliente->senha);
+    cJSON_AddStringToObject(enviar_dados, "acao", "listar_caronas");
+
+    char *mensagem = cJSON_PrintUnformatted(enviar_dados);
+    if (mensagem != NULL) {
+        write(socketCliente, mensagem, strlen(mensagem));
+        free(mensagem);
+    }
+    cJSON_Delete(enviar_dados);
+
+    cJSON *arrayResposta = NULL;
+    while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
+        ssize_t bytes = read(socketCliente, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
+        if (bytes <= 0){ 
+            servidorOffline = 1;
+            break;
+        }
+        total += bytes;
+        buffer_mensagem[total] = '\0';
+        arrayResposta = cJSON_Parse(buffer_mensagem);
+    }
+
+    if (servidorOffline) {
+        printf("O SERVIDOR ESTA OFFLINE\n");
+        cJSON_Delete(arrayResposta);
+        return;
+    }
+    if (arrayResposta == NULL) {
+        printf("Erro ao obter lista de caronas.\n");
+        return;
+    }
+
+    int n = cJSON_GetArraySize(arrayResposta);
+    if (n == 0) {
+        printf("NENHUMA CARONA CADASTRADA!\n");
+        cJSON_Delete(arrayResposta);
+    } else {
+        printf("====================================\n");
+        printf("           MINHAS CARONAS          \n");
+        printf("====================================\n");
+
+        for (int i = 0; i < n; i++) {
+            cJSON *item = cJSON_GetArrayItem(arrayResposta, i);
+            int id = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "id"));
+            char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(item, "origem"));
+            char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(item, "destino"));
+            int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "capacidade"));
+            char *data = cJSON_GetStringValue(cJSON_GetObjectItem(item, "data"));
+            char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(item, "hora"));
+            char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(item, "nomeMotorista"));
+            float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "preco"));
+            printf("====================================\n");
+            printf("ID: %d\n", id);
+            printf("Nome do Motorista: %s\n", nomeMotorista);
+            printf("Origem: %s\n", cidadeOrigem);
+            printf("Destino: %s\n", cidadeDestino);
+            printf("Data: %s\n", data);
+            printf("Hora: %s\n", hora);
+            printf("Capacidade: %d\n", capacidade);
+            printf("Preco: %.2f\n", preco);
+        }
+        printf("====================================\n");
+        cJSON_Delete(arrayResposta);
+    }
+}
+
+//função para cancelar uma carona do cliente
+void cancelar_carona(int socketCliente, Cliente *cliente){
+    char buffer_mensagem[4096] = {0};
+    int total = 0;
+    int servidorOffline = 0;
+
+    cJSON *enviar_dados = cJSON_CreateObject();
+    cJSON_AddStringToObject(enviar_dados, "classe", "Cliente");
+    cJSON_AddStringToObject(enviar_dados, "nome", cliente->nome);
+    cJSON_AddStringToObject(enviar_dados, "email", cliente->email);
+    cJSON_AddStringToObject(enviar_dados, "senha", cliente->senha);
+    cJSON_AddStringToObject(enviar_dados, "acao", "listar_caronas");
+
+    char *mensagem = cJSON_PrintUnformatted(enviar_dados);
+    if (mensagem != NULL) {
+        write(socketCliente, mensagem, strlen(mensagem));
+        free(mensagem);
+    }
+    cJSON_Delete(enviar_dados);
+
+    cJSON *arrayResposta = NULL;
+    while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
+        ssize_t bytes = read(socketCliente, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
+        if (bytes <= 0){
+            servidorOffline = 1;
+            break;
+        } 
+        total += bytes;
+        buffer_mensagem[total] = '\0';
+        arrayResposta = cJSON_Parse(buffer_mensagem);
+    }
+
+    if (servidorOffline) {
+        printf("O SERVIDOR ESTA OFFLINE\n");
+        cJSON_Delete(arrayResposta);
+        return;
+    }
+    if (arrayResposta == NULL) {
+        printf("Erro ao obter lista de caronas.\n");
+        return;
+    }
+
+    int n = cJSON_GetArraySize(arrayResposta);
+    if (n == 0) {
+        printf("NENHUMA CARONA CADASTRADA!\n");
+        cJSON_Delete(arrayResposta);
+    } else {
+        printf("====================================\n");
+        printf("           MINHAS CARONAS          \n");
+        printf("====================================\n");
+
+        for (int i = 0; i < n; i++) {
+            cJSON *item = cJSON_GetArrayItem(arrayResposta, i);
+            int id = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "id"));
+            char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(item, "origem"));
+            char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(item, "destino"));
+            int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "capacidade"));
+            char *data = cJSON_GetStringValue(cJSON_GetObjectItem(item, "data"));
+            char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(item, "hora"));
+            char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(item, "nomeMotorista"));
+            float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "preco"));
+            printf("====================================\n");
+            printf("ID: %d\n", id);
+            printf("Nome do Motorista: %s\n", nomeMotorista);
+            printf("Origem: %s\n", cidadeOrigem);
+            printf("Destino: %s\n", cidadeDestino);
+            printf("Data: %s\n", data);
+            printf("Hora: %s\n", hora);
+            printf("Capacidade: %d\n", capacidade);
+            printf("Preco: %.2f\n", preco);
+        }
+        printf("====================================\n");
+        cJSON_Delete(arrayResposta);
+
+        printf("Selecione a carona que voce deseja cancelar pelo ID (ou -1 para voltar): \n");
+        int idSelecionado;
+        scanf("%d", &idSelecionado);
+        if (idSelecionado == -1){
+            return;
+        }
+        cJSON *respostaSelecionada = cJSON_CreateObject();
+        cJSON_AddStringToObject(respostaSelecionada, "classe", "Cliente");
+        cJSON_AddStringToObject(respostaSelecionada, "acao", "cancelar_carona");
+        cJSON_AddStringToObject(respostaSelecionada, "emailCliente", cliente->email);
+        cJSON_AddStringToObject(respostaSelecionada, "nomeCliente", cliente->nome);
+        cJSON_AddNumberToObject(respostaSelecionada, "idSelecionado", idSelecionado);
+        char *mensagemSelecionada = cJSON_PrintUnformatted(respostaSelecionada);
+        if (mensagemSelecionada != NULL) {
+            write(socketCliente, mensagemSelecionada, strlen(mensagemSelecionada));
+            free(mensagemSelecionada);
+        }
+        cJSON_Delete(respostaSelecionada);
+
+        int bytes = read(socketCliente, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+        if (bytes > 0) {
+            buffer_mensagem[bytes] = '\0';
+            if (strcmp(buffer_mensagem, "CARONA_CANCELADA") == 0) {
+                printf("Carona cancelada com sucesso!\n");
+            } else {
+                printf("Carona nao cancelada! motivo: %s\n", buffer_mensagem);
+            }
+        } else {
+            printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+        }
+    }
+}
+
+//função para pedir ao servidor os avisos de trechos removidos (cancelados pelo motorista) e mostrá-los ao cliente
+void ver_notificacoes(int socketCliente, Cliente *cliente){
+    int servidorOffline = 0;
+    const char *erroServidor = NULL;
+
+    //Cria o pacote cJSON para a requisição
+    cJSON *enviar_dados = cJSON_CreateObject();
+    cJSON_AddStringToObject(enviar_dados, "classe", "Cliente");
+    cJSON_AddStringToObject(enviar_dados, "nome", cliente->nome);
+    cJSON_AddStringToObject(enviar_dados, "email", cliente->email);
+    cJSON_AddStringToObject(enviar_dados, "acao", "listar_avisos");
+
+    char *mensagem = cJSON_PrintUnformatted(enviar_dados);
+    if (mensagem != NULL) {
+        write(socketCliente, mensagem, strlen(mensagem));
+        free(mensagem);
+    }
+    cJSON_Delete(enviar_dados);
+
+    //a resposta pode chegar dividida em vários pacotes e não tem tamanho fixo (depende de quantos avisos existem),
+    //por isso o buffer cresce conforme necessário até conseguir parsear o JSON completo
+    size_t capacidade = 4096;
+    size_t total = 0;
+    char *buffer_mensagem = malloc(capacidade);
+    if (buffer_mensagem == NULL) {
+        printf("Erro de memoria ao obter avisos.\n");
+        return;
+    }
+    buffer_mensagem[0] = '\0';
+
+    cJSON *arrayAvisos = NULL;
+    while (arrayAvisos == NULL) {
+        if (total + 1 >= capacidade) {
+            char *novo = realloc(buffer_mensagem, capacidade * 2);
+            if (novo == NULL) {
+                printf("Erro de memoria ao obter avisos.\n");
+                free(buffer_mensagem);
+                return;
+            }
+            buffer_mensagem = novo;
+            capacidade *= 2;
+        }
+
+        ssize_t bytes = read(socketCliente, buffer_mensagem + total, capacidade - 1 - total);
+        if (bytes <= 0) {
+            servidorOffline = 1;
+            break;
+        }
+        total += bytes;
+        buffer_mensagem[total] = '\0';
+
+        //a resposta válida é sempre um array JSON (começa com '['); qualquer outra coisa é uma mensagem de erro em texto
+        //(EMAIL_INVALIDO, FALHA_LER_AVISOS, ACAO_DESCONHECIDA...) e não pode ir para o parse, senão o read ficaria travado
+        if (buffer_mensagem[0] != '[') {
+            erroServidor = buffer_mensagem;
+            break;
+        }
+
+        arrayAvisos = cJSON_Parse(buffer_mensagem);
+    }
+
+    if (servidorOffline) {
+        printf("O SERVIDOR ESTA OFFLINE\n");
+    } else if (erroServidor != NULL) {
+        printf("Nao foi possivel obter os avisos. Motivo: %s\n", erroServidor);
+    } else if (!cJSON_IsArray(arrayAvisos)) {
+        printf("Erro ao obter avisos.\n");
+    } else {
+        int n = cJSON_GetArraySize(arrayAvisos);
+        if (n == 0) {
+            printf("NENHUM AVISO NOVO!\n");
+        } else {
+            printf("====================================\n");
+            printf("   AVISOS DE TRECHOS CANCELADOS (%d)\n", n);
+            printf("====================================\n");
+            for (int i = 0; i < n; i++) {
+                cJSON *item = cJSON_GetArrayItem(arrayAvisos, i);
+                char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(item, "nomeMotorista"));
+                char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(item, "origem"));
+                char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(item, "destino"));
+                char *data = cJSON_GetStringValue(cJSON_GetObjectItem(item, "data"));
+                char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(item, "hora"));
+                printf("Aviso %d\n", i + 1);
+                printf("O motorista %s cancelou o trecho que voce reservou:\n", nomeMotorista ? nomeMotorista : "(desconhecido)");
+                printf("Origem: %s\n", cidadeOrigem ? cidadeOrigem : "-");
+                printf("Destino: %s\n", cidadeDestino ? cidadeDestino : "-");
+                printf("Data: %s\n", data ? data : "-");
+                printf("Hora: %s\n", hora ? hora : "-");
+                printf("====================================\n");
+            }
+        }
+    }
+
+    cJSON_Delete(arrayAvisos);
+    free(buffer_mensagem);
+}
+
+void telaMenu(int socketCliente, Cliente *cliente){
+    char buffer_mensagem[18] = {0};
+    int escolha = 0;
+    int sair = 0;
+    int enviou = 0;
+
+    while(sair != 1){
+        printf("====================================\n");
+        printf("                MENU                \n");
+        printf("====================================\n");
+        printf(" 1- Buscar Carona\n");
+        printf(" 2- Cancelar Reserva\n");
+        printf(" 3- Ver minhas Caronas\n");
+        printf(" 4- Ver Notificacoes\n");
+        printf(" 5- Sair da Conta\n");
+        printf("====================================\n");
+        printf("Escolha uma opcao: ");
+        scanf("%d", &escolha);
+
+        if (escolha == 1) {
+            buscarCarona(socketCliente, cliente);
+        } else if (escolha == 2) {
+            cancelar_carona(socketCliente, cliente);
+        } else if (escolha == 3) {
+            ver_caronas(socketCliente, cliente);
+        } else if (escolha == 4) {
+            ver_notificacoes(socketCliente, cliente);
+        } else if (escolha == 5) {
+            sair = 1;
+        } else {
+            printf("Opcao invalida. Tente novamente.\n");
+        }
+    }
+
+}
+
+void telaLogin(int socketCliente, Cliente *cliente){
+    char buffer_mensagem[18] = {0};
+    int escolha = 0;
+    int sair = 0;
+    int autenticado = 0;
+    fflush(stdin);
+
+    while (!autenticado && !sair) {
+        int enviou = 0;
+        while (sair != 1 && !enviou) {
+            printf("====================================\n");
+            printf("                Login               \n");
+            printf("====================================\n");
+            printf(" 1- Email: %s\n", cliente->email);
+            printf(" 2- Senha: %s\n", cliente->senha);
+            printf(" 3- Enviar Login                    \n");
+            printf(" 4- Voltar                          \n");
+            printf("====================================\n");
+            printf("Escolha uma opcao: ");
+            scanf("%d", &escolha);
+
+            if (escolha == 1) {
+                printf("Digite seu email: ");
+                scanf(" %49[^\n]", cliente->email);
+            } else if (escolha == 2) {
+                printf("Digite sua senha: ");
+                scanf(" %49[^\n]", cliente->senha);
+            } else if (escolha == 3) {
+                enviarCadastro(socketCliente, cliente->nome, cliente->email, cliente->senha, 1);
+                enviou = 1;
+            } else if (escolha == 4) {
+                sair = 1;
+            } else {
+                printf("Opcao invalida. Tente novamente.\n");
+            }
+        }
+
+        if (sair) {
+            return;
+        }
+
+        int bytes = read(socketCliente, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+        if (bytes > 0) {
+            buffer_mensagem[bytes] = '\0';
+            if (strcmp(buffer_mensagem, "NAO_AUTENTICADO") == 0) {
+                printf("Email ou senha incorretos. Tente novamente.\n");
+            } 
+            cJSON *respostaJSON = cJSON_Parse(buffer_mensagem);
+            if (respostaJSON != NULL){
+                char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(respostaJSON, "nome"));
+                if (nome != NULL) {
+                    printf("Login realizado com sucesso!\n");
+                    cliente->status = AUTENTICADO;
+                    strncpy(cliente->nome, nome, sizeof(cliente->nome) - 1);
+                    cliente->nome[sizeof(cliente->nome) - 1] = '\0';
+                    autenticado = 1;
+                    telaMenu(socketCliente, cliente);
+                }
+                cJSON_Delete(respostaJSON);
+            }
+        } else {
+            printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+        }
+    }
+}
+
+void telaCadastro(int socketCliente, Cliente *cliente){
+    int escolha = 0;
+    char buffer_mensagem[20] = {0};
+    int sair = 0;
+    int enviou = 0;
+    while(sair != 1){
+        printf("====================================\n");
+        printf("              Cadastro              \n");
+        printf("====================================\n");
+        printf(" 1- Nome: %s\n", cliente->nome);
+        printf(" 2- Email: %s\n", cliente->email);
+        printf(" 3- Senha: %s\n", cliente->senha);
+        printf(" 4- Enviar Cadastro                 \n");
+        printf(" 5- Voltar                          \n");
+        printf("====================================\n");
+        printf("Escolha uma opcao: ");
+        scanf("%d", &escolha);
+
+        if (escolha == 1) {
+            printf("Digite seu nome: ");
+            scanf(" %49[^\n]", cliente->nome);
+        } else if (escolha == 2) {
+            printf("Digite seu email: ");
+            scanf(" %49[^\n]", cliente->email);
+        } else if (escolha == 3) {
+            printf("Digite sua senha: ");
+            scanf(" %49[^\n]", cliente->senha);
+        } else if (escolha == 4) {
+            enviarCadastro(socketCliente, cliente->nome, cliente->email, cliente->senha, 2);
+            enviou = 1;
+            break;
+        } else if (escolha == 5) {
+            sair = 1;
+        } else {
+            printf("Opcao invalida. Tente novamente.\n");
+        }
+    }
+
+    if (!enviou) {
+        return;
+    }
+
+    ssize_t bytes = read(socketCliente, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+    if (bytes > 0) {
+        buffer_mensagem[bytes] = '\0';
+        if (strcmp(buffer_mensagem, "EMAIL_JA_CADASTRADO") == 0) {
+            printf("Email ja cadastrado. Tente novamente.\n");
+            telaCadastro(socketCliente, cliente);
+        } else if (strcmp(buffer_mensagem, "CADASTRO_REALIZADO") == 0) {
+            printf("Cadastro realizado com sucesso!\n");
+            cliente->status = AUTENTICADO;
+        } else {
+            printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
+        }
+    } else {
+        printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+    }
+}
+
+void telaInicial(int socketCliente, Cliente *cliente){
+    int sair = 0;
+    while (!sair) {
+        int opcao = 0;
+        printf("====================================\n");
+        printf("      Sistema de Login Cliente      \n");
+        printf("====================================\n");
+        printf("| 1- LOGIN                         |\n");
+        printf("| 2- CADASTRAR                     |\n");
+        printf("| 3- SAIR                          |\n");
+        printf("====================================\n");
+        printf("Escolha uma opcao: ");
+        scanf("%d", &opcao);
+
+        switch (opcao) {
+            case 1:
+                telaLogin(socketCliente, cliente);
+                break;
+            case 2:
+                telaCadastro(socketCliente, cliente);
+                break;
+            case 3:
+                printf("Saindo...\n");
+                send(socketCliente, "DESCONECTADO", 13, 0);
+                cliente->status = DESCONECTADO;
+                sair = 1;
+                break;
+            default:
+                printf("Opcao invalida. Tente novamente.\n");
+                break;
+        }
+    }
+}
+
+int main(){
+    //signal para evitar que o programa seja encerrado quando o servidor for desligado
+    signal(SIGPIPE, SIG_IGN);
+    int socketCliente;
+    struct sockaddr_in endereco_servidor;
+    char buffer_mensagem[81] = {0};
+    char ip_servidor[100];
+
+    Cliente *cliente = calloc(1, sizeof(Cliente));
+    //cria o socket do cliente
+    if ((socketCliente = socket(AF_INET, SOCK_STREAM, 0)) < 0){
+        perror("Socket nao criado");
+        free(cliente);
+        exit(EXIT_FAILURE);
+    }
+    //relaciona os endereços
+    memset(&endereco_servidor, 0, sizeof(endereco_servidor));
+    endereco_servidor.sin_family = AF_INET;
+    endereco_servidor.sin_port = htons(PORT);
+    
+    printf("Digite o IP do servidor: ");
+    scanf("%99s", ip_servidor);
+
+    struct hostent *host = gethostbyname(ip_servidor);
+    if (host == NULL) {
+        perror("ENDERECO IP NAO ENCONTRADO NA REDE!");
+        free(cliente);
+        close(socketCliente);
+        exit(EXIT_FAILURE);
+    }
+
+    memcpy(&endereco_servidor.sin_addr, host->h_addr_list[0], host->h_length);
+    //conecta com o servidor
+    int status = connect(socketCliente, (struct sockaddr*)&endereco_servidor, sizeof(endereco_servidor));
+
+    if (status < 0){
+        perror("conexao com o servidor nao estabelecida");
+        free(cliente);
+        close(socketCliente);
+        exit(EXIT_FAILURE);
+    }
+
+    telaInicial(socketCliente, cliente);
+    
+    ssize_t bytes = read(socketCliente, buffer_mensagem, 80);
+    if (bytes > 0) {
+        buffer_mensagem[bytes] = '\0';
+        printf("Mensagem do servidor: %s\n", buffer_mensagem);
+    }
+    
+    free(cliente);
+    close(socketCliente);
+    return 0;
+}

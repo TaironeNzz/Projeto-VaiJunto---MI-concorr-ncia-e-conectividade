@@ -1,0 +1,17 @@
+# Usar a imagem oficial do GCC
+FROM gcc:latest
+
+# Definir o diretório de trabalho
+WORKDIR /app
+
+# Copiar todos os arquivos do diretório atual para o container
+COPY . .
+
+# Compilar o cliente com a biblioteca cJSON
+RUN gcc  cliente.c cJSON.c -o cliente_bin
+
+# docker build -t app-cliente -f DockerFile.Cliente .
+# docker run -it app-cliente
+
+# Comando para iniciar o cliente
+CMD ["./cliente_bin"]
