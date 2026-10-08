@@ -2,17 +2,20 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <ctype.h>
 #include <pthread.h>
-#include "cJSON.h"
-#include "grafomapa.h"
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <fcntl.h>
-#include <arpa/inet.h>
+#include <signal.h>
 #include <time.h>
 #include <stdarg.h>
+#include <sys/types.h>
+#include <microhttpd.h>
+#include "cJSON.h"
+#include "grafomapa.h"
+
 #define PORT 65432
+//tamanho máximo aceito para o corpo de uma requisição
+#define MAX_CORPO (64 * 1024)
+
 //grafo do mapa para verificação de caminhos
 Grafo *mapa;
 //id do próximo trecho e contador de trechos cadastrados (persistidos em ArquivoID/id.txt e ArquivoID/contadorTrechos.txt)
@@ -25,9 +28,6 @@ pthread_mutex_t loginClienteMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t avisosMutex = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t idMutex = PTHREAD_MUTEX_INITIALIZER;
 
-//Se 1, os avisos são apagados do arquivo depois de entregues ao cliente (cada aviso é mostrado uma única vez)
-//Se 0, os avisos permanecem no arquivo e o cliente recebe todos eles a cada consulta
-#define REMOVER_AVISOS_APOS_ENVIO 1
 #define MAX_TRECHOS 1000
 
 typedef struct {
@@ -362,12 +362,31 @@ void *rotinaLimpezaTrechos(void *arg) {
     return NULL;
 }
 
+//Resposta HTTP montada pelos handlers. Cada requisição tem a sua (fica na pilha da thread que atende o pedido).
+typedef struct {
+    int status;     //código HTTP (0 = nenhum handler respondeu)
+    char *corpo;    //corpo JSON (alocado com malloc; liberado depois do envio)
+} Resposta;
+
+// Guarda o status e o corpo da resposta. Mantém a mesma assinatura de antes, então os handlers continuam iguais.
+void enviar_resposta_http(Resposta *resp, int status_code, const char *status_text, const char *json_body) {
+    (void)status_text;
+    free(resp->corpo);
+    resp->status = status_code;
+    resp->corpo = strdup(json_body != NULL ? json_body : "");
+}
+
 //função para cadastrar o cliente
-void cadastrarCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
+void cadastrarCliente(cJSON *jsonLogin, Resposta *resp, FILE *arquivoLogin){
     char dadosLogin[1024] = {0};
     int emailEncontrado = 0;
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
+
+    if (emailBuscado == NULL || nome == NULL) {
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Dados incompletos para cadastro de cliente\"}");
+        return;
+    }
 
     pthread_mutex_lock(&loginClienteMutex);
     rewind(arquivoLogin);
@@ -377,7 +396,7 @@ void cadastrarCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
         if(dadosJson != NULL) {
             char *email = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "email"));
             if (strcmp(email, emailBuscado) == 0) {
-                send(socketCliente, "EMAIL_JA_CADASTRADO", 19, 0);
+                enviar_resposta_http(resp, 409, "Conflict", "{\"erro\": \"Email ja cadastrado\"}");
                 emailEncontrado = 1;
                 break;
             }
@@ -388,7 +407,7 @@ void cadastrarCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
         char *saida = cJSON_PrintUnformatted(jsonLogin);
         fprintf(arquivoLogin, "%s\n", saida);
         log_mensagem(LOG_INFO, "Novo cliente cadastrado - Nome: %s | Email: %s", nome, emailBuscado);
-        send(socketCliente, "CADASTRO_REALIZADO", 18, 0);
+        enviar_resposta_http(resp, 201, "Created", "{\"mensagem\": \"Cadastro realizado com sucesso\"}");
         free(saida);
     }
     pthread_mutex_unlock(&loginClienteMutex);
@@ -397,11 +416,16 @@ void cadastrarCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
 }
 
 //função para cadastrar o motorista
-void cadastrarMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
+void cadastrarMotorista(cJSON *jsonLogin, Resposta *resp, FILE *arquivo){
     int emailEncontrado = 0;
     char dadosLogin[1024] = {0};
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
+
+    if (emailBuscado == NULL || nome == NULL) {
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Dados incompletos para cadastro de motorista\"}");
+        return;
+    }
 
     pthread_mutex_lock(&loginMotoristaMutex);
     rewind(arquivo);
@@ -411,7 +435,7 @@ void cadastrarMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
         if(dadosJson != NULL) {
             char *email = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "email"));
             if (strcmp(email, emailBuscado) == 0) {
-                send(socketMotorista, "EMAIL_JA_CADASTRADO", 19, 0);
+                enviar_resposta_http(resp, 409, "Conflict", "{\"erro\": \"Email ja cadastrado\"}");
                 emailEncontrado = 1;
                 break;
                 }
@@ -423,16 +447,16 @@ void cadastrarMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
             log_mensagem(LOG_INFO, "Novo motorista cadastrado - Nome: %s | Email: %s", nome, emailBuscado);
             fprintf(arquivo, "%s\n", saida);
             fflush(arquivo);
-            send(socketMotorista, "CADASTRO_REALIZADO", 18, 0);
+            enviar_resposta_http(resp, 201, "Created", "{\"mensagem\": \"Cadastro realizado com sucesso\"}");
             free(saida);
         }
     pthread_mutex_unlock(&loginMotoristaMutex);
 }
 
-int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista){
+int cadastrarTrecho(cJSON *jsonLogin, Resposta *resp){
     if (mapa == NULL) {
         printf("Mapa nao carregado. Nao e possivel cadastrar trecho.\n");
-        send(socketMotorista, "MAPA_NAO_CARREGADO", 18, 0);
+        enviar_resposta_http(resp, 500, "Internal Server Error", "{\"erro\": \"Mapa nao carregado\"}");
         return 0;
     }
 
@@ -448,7 +472,7 @@ int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista){
     cJSON *arrayNomesClientes = cJSON_GetObjectItem(jsonLogin, "nomesClientes");
 
     if (nomeMotorista == NULL || emailMotorista == NULL || origem == NULL || destino == NULL || data == NULL || hora == NULL) {
-        send(socketMotorista, "FALHA_CADASTRO_TRECHO", 21, 0);
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Dados incompletos para cadastro de trecho\"}");
         return 0;
     }
 
@@ -483,23 +507,23 @@ int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista){
 
         if (!gravou) {
             log_mensagem(LOG_ERROR, "Falha ao gravar o arquivo do trecho ID %d", meuIdTrecho);
-            send(socketMotorista, "FALHA_CADASTRO_TRECHO", 21, 0);
+            enviar_resposta_http(resp, 500, "Internal Server Error", "{\"erro\": \"Falha ao cadastrar trecho\"}");
             return 0;
         }
 
         ajustarContadorTrechos(1);
 
         log_mensagem(LOG_INFO, "Trecho ID %d cadastrado por %s (%s -> %s)", meuIdTrecho, nomeMotorista, origem, destino);
-        send(socketMotorista, "TRECHO_CADASTRADO", 17, 0);
+        enviar_resposta_http(resp, 201, "Created", "{\"mensagem\": \"Trecho cadastrado com sucesso\"}");
         return 1;
     } else {
-        send(socketMotorista, "FALHA_CADASTRO_TRECHO", 21, 0);
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Caminho nao encontrado\"}");
         return 0;
     }
 }
 
 //função para pegar os trechos de um motorista dos arquivos e retornar para o motorista
-void listar_trechos(cJSON *jsonLogin, int socketMotorista){
+void listar_trechos(cJSON *jsonLogin, Resposta *resp){
     cJSON *arrayResposta = cJSON_CreateArray();
     char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
     char *emailMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
@@ -538,17 +562,22 @@ void listar_trechos(cJSON *jsonLogin, int socketMotorista){
         cJSON_Delete(trechosJson);
     }
     char *resposta = cJSON_PrintUnformatted(arrayResposta);
-    send(socketMotorista, resposta, strlen(resposta), 0);
+    enviar_resposta_http(resp, 200, "OK", resposta);
     free(resposta);
     cJSON_Delete(arrayResposta);
 }
 
 //função para acessar o arquivo de login e verificar se o email e senha estão certos
-void loginMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
+void loginMotorista(cJSON *jsonLogin, Resposta *resp, FILE *arquivo){
     int emailEncontrado = 0;
     char dadosLogin[1024] = {0};
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *senhaBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "senha"));
+
+    if (emailBuscado == NULL || senhaBuscada == NULL) {
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Dados incompletos para login de motorista\"}");
+        return;
+    }
 
     pthread_mutex_lock(&loginMotoristaMutex);
     rewind(arquivo);
@@ -568,7 +597,7 @@ void loginMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
                 }
                 char *resposta = cJSON_PrintUnformatted(respostaJson);
                 log_mensagem(LOG_INFO, "Motorista logado - Nome: %s | Email: %s", nome, emailBuscado);
-                send(socketMotorista, resposta, strlen(resposta), 0);
+                enviar_resposta_http(resp, 200, "OK", resposta);
                 emailEncontrado = 1;
                 cJSON_Delete(respostaJson);
                 break;
@@ -578,7 +607,7 @@ void loginMotorista(cJSON *jsonLogin, int socketMotorista, FILE *arquivo){
         }
         if (!emailEncontrado) {
             log_mensagem(LOG_WARN, "Falha de autenticação para o email: %s", emailBuscado);
-            send(socketMotorista, "NAO_AUTENTICADO", 15, 0);
+            enviar_resposta_http(resp, 401, "Unauthorized", "{\"erro\": \"Credenciais invalidas\"}");
         }
     pthread_mutex_unlock(&loginMotoristaMutex);
 }
@@ -656,17 +685,6 @@ static int salvarAvisos(cJSON *raiz) {
     return ok;
 }
 
-//Função auxiliar: envia o buffer inteiro (send pode enviar menos bytes do que o pedido). Retorna 1 em sucesso.
-static int enviarTudo(int socket, const char *dados, size_t tamanho) {
-    size_t enviados = 0;
-    while (enviados < tamanho) {
-        ssize_t n = send(socket, dados + enviados, tamanho - enviados, MSG_NOSIGNAL);
-        if (n <= 0) return 0;
-        enviados += (size_t)n;
-    }
-    return 1;
-}
-
 //Função para adicionar no arquivo de avisos os trechos removidos
 void adicionarAvisoTrechoRemovido(cJSON *trechoJson) {
     char *origem = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "origem"));
@@ -740,17 +758,17 @@ void adicionarAvisoTrechoRemovido(cJSON *trechoJson) {
 }
 
 //Função para retornar ao cliente os avisos de trechos removidos
-//Requisição: {"classe":"Cliente","acao":"listar_avisos","email":"cliente@email.com"}
+//Requisição: GET /api/clientes/avisos?email=cliente@email.com
 //Resposta: array JSON com os avisos do cliente (ou "[]" se não houver nenhum)
 //Erros: "EMAIL_INVALIDO" (requisição sem email) e "FALHA_LER_AVISOS" (arquivo ilegível)
-void listarAvisosCliente(cJSON *jsonLogin, int socketCliente) {
+void listarAvisosCliente(cJSON *jsonLogin, Resposta *resp) {
     char *emailCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     if (emailCliente == NULL) {
         emailCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailCliente"));
     }
     if (emailCliente == NULL) {
         log_mensagem(LOG_WARN, "Consulta de avisos sem email do cliente");
-        send(socketCliente, "EMAIL_INVALIDO", 14, 0);
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Email invalido\"}");
         return;
     }
 
@@ -759,7 +777,7 @@ void listarAvisosCliente(cJSON *jsonLogin, int socketCliente) {
     cJSON *raiz = NULL;
     if (!carregarAvisos(&raiz)) {
         pthread_mutex_unlock(&avisosMutex);
-        send(socketCliente, "FALHA_LER_AVISOS", 16, 0);
+        enviar_resposta_http(resp, 500, "Internal Server Error", "{\"erro\": \"Falha ao ler avisos\"}");
         return;
     }
 
@@ -772,33 +790,54 @@ void listarAvisosCliente(cJSON *jsonLogin, int socketCliente) {
         log_mensagem(LOG_ERROR, "Falha ao gerar resposta de avisos para o cliente: %s", emailCliente);
         cJSON_Delete(raiz);
         pthread_mutex_unlock(&avisosMutex);
-        send(socketCliente, "FALHA_LER_AVISOS", 16, 0);
+        enviar_resposta_http(resp, 500, "Internal Server Error", "{\"erro\": \"Falha ao ler avisos\"}");
         return;
     }
 
-    int enviou = enviarTudo(socketCliente, resposta, strlen(resposta));
+    enviar_resposta_http(resp, 200, "OK", resposta);
     log_mensagem(LOG_INFO, "Consulta de avisos - Cliente: %s | Avisos enviados: %d", emailCliente,
                  temAvisos ? cJSON_GetArraySize(listaAvisos) : 0);
-
-    //só apaga os avisos do arquivo se eles realmente foram enviados, para o cliente não perdê-los
-    if (REMOVER_AVISOS_APOS_ENVIO && enviou && temAvisos) {
-        cJSON_DeleteItemFromObjectCaseSensitive(raiz, emailCliente);
-        salvarAvisos(raiz);
-    }
 
     free(resposta);
     cJSON_Delete(raiz);
     pthread_mutex_unlock(&avisosMutex);
 }
 
+//DELETE /api/clientes/avisos -> apaga os avisos do cliente (o GET só lê, porque GET não pode alterar dados)
+void apagarAvisosCliente(cJSON *jsonLogin, Resposta *resp) {
+    char *emailCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
+    if (emailCliente == NULL) {
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Email invalido\"}");
+        return;
+    }
+
+    pthread_mutex_lock(&avisosMutex);
+    cJSON *raiz = NULL;
+    if (!carregarAvisos(&raiz)) {
+        pthread_mutex_unlock(&avisosMutex);
+        enviar_resposta_http(resp, 500, "Internal Server Error", "{\"erro\": \"Falha ao ler avisos\"}");
+        return;
+    }
+    cJSON_DeleteItemFromObjectCaseSensitive(raiz, emailCliente);
+    int ok = salvarAvisos(raiz);
+    cJSON_Delete(raiz);
+    pthread_mutex_unlock(&avisosMutex);
+
+    if (ok) {
+        enviar_resposta_http(resp, 200, "OK", "{\"mensagem\": \"Avisos removidos\"}");
+    } else {
+        enviar_resposta_http(resp, 500, "Internal Server Error", "{\"erro\": \"Falha ao apagar avisos\"}");
+    }
+}
+
 //função para cancelar trecho de um motorista
-void cancelarTrechoMotorista(cJSON *jsonLogin, int socketMotorista){
+void cancelarTrechoMotorista(cJSON *jsonLogin, Resposta *resp){
     int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
     char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
     char *emailMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     if (emailMotorista == NULL){
         log_mensagem(LOG_ERROR, "Falha ao cancelar trecho do motorista %s -> email nulo", nomeMotorista);
-        send(socketMotorista, "TRECHO_NAO_ENCONTRADO", 21, 0);
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Trecho não encontrado\"}");
         return;
     }
     int trechoEncontrado = 0;
@@ -831,29 +870,29 @@ void cancelarTrechoMotorista(cJSON *jsonLogin, int socketMotorista){
 
     if (trechoEncontrado) {
         ajustarContadorTrechos(-1);
-        send(socketMotorista, "TRECHO_CANCELADO", 16, 0);
+        enviar_resposta_http(resp, 200, "OK", "{\"mensagem\": \"Trecho cancelado com sucesso\"}");
     } else {
-        send(socketMotorista, "TRECHO_NAO_ENCONTRADO", 21, 0);
+        enviar_resposta_http(resp, 404, "Not Found", "{\"erro\": \"Trecho não encontrado\"}");
     }
 }
 
 //função para um motorista cadastrar sua rota informando os trechos
-void cadastrarRota(cJSON *jsonLogin, int socketMotorista){
+void cadastrarRota(cJSON *jsonLogin, Resposta *resp){
     char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
     cJSON *trechosArray = cJSON_GetObjectItem(jsonLogin, "trechos");
 
     if (mapa == NULL) {
-        send(socketMotorista, "MAPA_NAO_CARREGADO", 18, 0);
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Mapa não carregado\"}");
         return;
     }
     if (trechosArray == NULL || !cJSON_IsArray(trechosArray) || nomeMotorista == NULL) {
-        send(socketMotorista, "ROTA_INVALIDA", 13, 0);
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Rota invalida\"}");
         return;
     }
 
     int totalTrechos = cJSON_GetArraySize(trechosArray);
     if (totalTrechos == 0) {
-        send(socketMotorista, "ROTA_INVALIDA", 13, 0);
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"ROTA_INVALIDA\"}");
         return;
     }
 
@@ -861,7 +900,7 @@ void cadastrarRota(cJSON *jsonLogin, int socketMotorista){
     for (int i = 0; i < totalTrechos; i++) {
         cJSON *trecho = cJSON_GetArrayItem(trechosArray, i);
         if (trecho == NULL){
-            send(socketMotorista, "FALHA_CADASTRO_ROTA", 19, 0);
+            enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"FALHA_CADASTRO_ROTA\"}");
             return;
         }
         char *origem = cJSON_GetStringValue(cJSON_GetObjectItem(trecho, "origem"));
@@ -871,16 +910,16 @@ void cadastrarRota(cJSON *jsonLogin, int socketMotorista){
         char *email = cJSON_GetStringValue(cJSON_GetObjectItem(trecho, "emailMotorista"));
 
         if (origem == NULL || destino == NULL || data == NULL || hora == NULL || email == NULL) {
-            send(socketMotorista, "ROTA_INVALIDA", 13, 0);
+            enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"ROTA_INVALIDA\"}");
             return;
         }
         if (!existeCaminhoBFSPorNome(mapa, origem, destino)) {
-            send(socketMotorista, "FALHA_CADASTRO_ROTA", 19, 0);
+            enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"FALHA_CADASTRO_ROTA\"}");
             return;
         }
 
         if (destinoAnterior != NULL && strcmp(origem, destinoAnterior) != 0) {
-            send(socketMotorista, "ROTA_DESCONECTADA", 17, 0);
+            enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"ROTA_DESCONECTADA\"}");
             return;
         }
         destinoAnterior = destino;
@@ -947,56 +986,26 @@ void cadastrarRota(cJSON *jsonLogin, int socketMotorista){
             pthread_mutex_unlock(mutexTrecho);
         }
         log_mensagem(LOG_ERROR, "Falha ao gravar a rota do motorista %s; trechos ja gravados foram desfeitos", nomeMotorista);
-        send(socketMotorista, "FALHA_CADASTRO_ROTA", 19, 0);
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"FALHA_CADASTRO_ROTA\"}");
         return;
     }
 
     ajustarContadorTrechos(totalTrechos);
     log_mensagem(LOG_INFO, "Rota (multi-trechos) cadastrada por %s | Total de trechos: %d", nomeMotorista, totalTrechos);
-    send(socketMotorista, "ROTA_CADASTRADA", 16, 0);
-}
-
-//função para tratar todas as ações do motorista
-void tratarMotorista(int socketMotorista, cJSON *jsonLogin, char *acao){
-    char dadosLogin[4096] = {0};
-    int emailEncontrado = 0;
-    FILE *arquivo = fopen("dados/loginMotorista.json", "a+");
-    if (arquivo == NULL) {
-        perror("Erro ao abrir o arquivo");
-        close(socketMotorista);
-        return;
-    }
-    rewind(arquivo);
-
-
-    char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
-    char *senhaBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "senha"));
-    
-    if (strcmp(acao, "login") == 0) {
-        loginMotorista(jsonLogin, socketMotorista, arquivo);
-    } else if (strcmp(acao, "cadastro") == 0) {
-        cadastrarMotorista(jsonLogin, socketMotorista, arquivo);
-    } else if (strcmp(acao, "cadastrar_trecho") == 0) {
-        cadastrarTrecho(jsonLogin, socketMotorista);
-    } else if (strcmp(acao, "listar_trechos") == 0) {
-        listar_trechos(jsonLogin, socketMotorista);
-    } else if (strcmp(acao, "cancelar_trecho") == 0) {
-        cancelarTrechoMotorista(jsonLogin, socketMotorista);
-    } else if (strcmp(acao, "cadastrar_rota") == 0) {
-        cadastrarRota(jsonLogin, socketMotorista);
-    } else {
-        send(socketMotorista, "ACAO_DESCONHECIDA", 17, 0);
-    }
-    fclose(arquivo);
-    return;
+    enviar_resposta_http(resp, 201, "Created", "{\"mensagem\": \"ROTA_CADASTRADA\"}");
 }
 
 //função para acessar o arquivo de login e verificar se o email e senha do cliente estão certos 
-void loginCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
+void loginCliente(cJSON *jsonLogin, Resposta *resp, FILE *arquivoLogin){
     int emailEncontrado = 0;
     char dadosLogin[1024] = {0};
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *senhaBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "senha"));
+
+    if (emailBuscado == NULL || senhaBuscada == NULL) {
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Dados incompletos para login de cliente\"}");
+        return;
+    }
 
     pthread_mutex_lock(&loginClienteMutex);
     rewind(arquivoLogin);
@@ -1015,7 +1024,7 @@ void loginCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
                     }
                 }
                 char *resposta = cJSON_PrintUnformatted(respostaJson);
-                send(socketCliente, resposta, strlen(resposta), 0);
+                enviar_resposta_http(resp, 200, "OK", resposta);
                 log_mensagem(LOG_INFO, "Cliente logado - Nome: %s | Email: %s", nome, emailBuscado);
                 emailEncontrado = 1;
                 cJSON_Delete(respostaJson);
@@ -1026,13 +1035,13 @@ void loginCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
     }
     if (!emailEncontrado) {
         log_mensagem(LOG_WARN, "Falha de autenticação para o email: %s", emailBuscado);
-        send(socketCliente, "NAO_AUTENTICADO", 15, 0);
+        enviar_resposta_http(resp, 401, "Unauthorized", "{\"erro\": \"NÃO_AUTENTICADO\"}");
     }
     pthread_mutex_unlock(&loginClienteMutex);
 }
 
 //função para buscar as caronas que o usuário pediu
-void buscar_carona(cJSON *jsonLogin, int socketCliente){
+void buscar_carona(cJSON *jsonLogin, Resposta *resp){
     cJSON *arrayResposta = cJSON_CreateArray();
     char *origemBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origem"));
     char *destinoBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "destino"));
@@ -1069,7 +1078,7 @@ void buscar_carona(cJSON *jsonLogin, int socketCliente){
         cJSON_Delete(trechosJson);
     }
     char *resposta = cJSON_PrintUnformatted(arrayResposta);
-    send(socketCliente, resposta, strlen(resposta), 0);
+    enviar_resposta_http(resp, 200, "OK", resposta);
     free(resposta);
     cJSON_Delete(arrayResposta);
 }
@@ -1140,32 +1149,32 @@ static int reservarAssentoTrecho(cJSON *jsonLogin, char **jsonTrecho) {
 }
 
 //função para reservar a carona que o cliente escolheu
-void selecionar_carona(cJSON *jsonLogin, int socketCliente){
+void selecionar_carona(cJSON *jsonLogin, Resposta *resp){
     int resultado = reservarAssentoTrecho(jsonLogin, NULL);
 
     if (resultado == RESERVA_OK) {
         char *emailStr = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailCliente"));
         int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
         log_mensagem(LOG_INFO, "Reserva realizada - Cliente: %s | Trecho ID: %d", emailStr, idSelecionado);
-        send(socketCliente, "CARONA_RESERVADA", 16, 0);
+        enviar_resposta_http(resp, 201, "Created", "{\"mensagem\": \"CARONA_RESERVADA\"}");
     } else if (resultado == RESERVA_SEM_ASSENTO || resultado == RESERVA_ERRO) {
-        send(socketCliente, "ASSENTO_INDISPONIVEL", 20, 0);
+        enviar_resposta_http(resp, 409, "Conflict", "{\"erro\": \"ASSENTO_INDISPONIVEL\"}");
     } else {
-        send(socketCliente, "TRECHO_NAO_ENCONTRADO", 21, 0);
+        enviar_resposta_http(resp, 404, "Not Found", "{\"erro\": \"TRECHO_NAO_ENCONTRADO\"}");
     }
 }
 
 //função para adicionar o trecho na rota do cliente
-void AddTrechoNaRota(cJSON *jsonLogin, int socketCliente){
+void AddTrechoNaRota(cJSON *jsonLogin, Resposta *resp){
     char *retornoTrecho = NULL;
     int resultado = reservarAssentoTrecho(jsonLogin, &retornoTrecho);
 
     if (resultado == RESERVA_OK && retornoTrecho != NULL) {
-        send(socketCliente, retornoTrecho, strlen(retornoTrecho), 0);
+        enviar_resposta_http(resp, 201, "Created", retornoTrecho);
     } else if (resultado == RESERVA_OK || resultado == RESERVA_SEM_ASSENTO || resultado == RESERVA_ERRO) {
-        send(socketCliente, "ASSENTO_INDISPONIVEL", 20, 0);
+        enviar_resposta_http(resp, 409, "Conflict", "{\"erro\": \"ASSENTO_INDISPONIVEL\"}");
     } else {
-        send(socketCliente, "TRECHO_NAO_ENCONTRADO", 21, 0);
+        enviar_resposta_http(resp, 404, "Not Found", "{\"erro\": \"TRECHO_NAO_ENCONTRADO\"}");
     }
     free(retornoTrecho);
 }
@@ -1215,7 +1224,7 @@ int cancelarReservaInterna(int idSelecionado, char *emailCliente, char *nomeClie
 }
 
 //função para verificar se a rota cumpre o caminho da origem até o destino, caso não, as reservas são canceladas
-void finalizar_Rota(cJSON *jsonLogin, int socketCliente){
+void finalizar_Rota(cJSON *jsonLogin, Resposta *resp){
     int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
     int trechoEncontrado = 0;
     char *destinoRota = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "destinoRota"));
@@ -1224,6 +1233,7 @@ void finalizar_Rota(cJSON *jsonLogin, int socketCliente){
     cJSON *rota = cJSON_GetObjectItem(jsonLogin, "rota");
     if (rota == NULL){
         printf("Objeto rotas nao criado!\n");
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"ROTA_INVALIDA\"}");
         return;
     }
     int total = cJSON_GetArraySize(rota);
@@ -1249,7 +1259,7 @@ void finalizar_Rota(cJSON *jsonLogin, int socketCliente){
 
     if (strcmp(origemTemporaria, origemRota) == 0 && strcmp(destinoTemporario, destinoRota) == 0) {
         log_mensagem(LOG_INFO, "Rota finalizada com sucesso (%s -> %s)", origemRota, destinoRota);
-        send(socketCliente, "CARONA_CADASTRADA", 17, 0);
+        enviar_resposta_http(resp, 200, "OK", "{\"mensagem\": \"CARONA_CADASTRADA\"}");
     } else {
         char *email = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
         char *nomeCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nomeCliente"));
@@ -1273,12 +1283,12 @@ void finalizar_Rota(cJSON *jsonLogin, int socketCliente){
         }
         
         printf("\n");
-        send(socketCliente, "CARONA_NAO_CADASTRADA", 21, 0); 
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"CARONA_NAO_CADASTRADA\"}");
     }
 }
 
 //função para obter as reservas do cliente
-void listar_reservas(cJSON *jsonLogin, int socketCliente){
+void listar_reservas(cJSON *jsonLogin, Resposta *resp){
     cJSON *arrayResposta = cJSON_CreateArray();
     char *emailCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     log_mensagem(LOG_INFO, "Consulta de reservas solicitada - Cliente: %s", emailCliente);
@@ -1319,13 +1329,13 @@ void listar_reservas(cJSON *jsonLogin, int socketCliente){
     }
 
     char *resposta = cJSON_PrintUnformatted(arrayResposta);
-    send(socketCliente, resposta, strlen(resposta), 0);
+    enviar_resposta_http(resp, 200, "OK", resposta);
     free(resposta);
     cJSON_Delete(arrayResposta);
 }
 
 //função para cancelar a reserva do cliente
-void cancelar_carona(cJSON *jsonLogin, int socketCliente){
+void cancelar_carona(cJSON *jsonLogin, Resposta *resp){
     int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
     char *emailCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailCliente"));
     char *nomeCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nomeCliente"));
@@ -1334,15 +1344,15 @@ void cancelar_carona(cJSON *jsonLogin, int socketCliente){
 
     if (cancelou) {
         log_mensagem(LOG_INFO, "Reserva cancelada pelo cliente - Cliente: %s | ID Trecho: %d", emailCliente, idSelecionado);
-        send(socketCliente, "CARONA_CANCELADA", 16, 0);
+        enviar_resposta_http(resp, 200, "OK", "{\"mensagem\": \"CARONA_CANCELADA\"}");
     } else {
         log_mensagem(LOG_WARN, "Falha ao cancelar reserva - Cliente: %s | ID Trecho: %d", emailCliente, idSelecionado);
-        send(socketCliente, "TRECHO_NAO_ENCONTRADO", 21, 0);
+        enviar_resposta_http(resp, 404, "Not Found", "{\"erro\": \"TRECHO_NAO_ENCONTRADO\"}");
     }
 }
 
 //função para buscar os possiveis trechos partindo de uma origem
-void buscar_trechos_partida(cJSON *jsonLogin, int socketCliente){
+void buscar_trechos_partida(cJSON *jsonLogin, Resposta *resp){
     cJSON *arrayResposta = cJSON_CreateArray();
     char *origemBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origem"));
 
@@ -1376,130 +1386,294 @@ void buscar_trechos_partida(cJSON *jsonLogin, int socketCliente){
         cJSON_Delete(trechosJson);
     }
     char *resposta = cJSON_PrintUnformatted(arrayResposta);
-    send(socketCliente, resposta, strlen(resposta), 0);
+    enviar_resposta_http(resp, 200, "OK", resposta);
     free(resposta);
     cJSON_Delete(arrayResposta);
 }
 
-//função para tratar as ações do cliente
-void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
-    char dadosLogin[1024] = {0};
-    char dadosTrechos[4096] = {0};
-    int emailEncontrado = 0;
-    FILE *arquivo = fopen("dados/loginCliente.json", "a+");
-    if (arquivo == NULL) {
-        perror("Erro ao abrir o arquivo");
-        close(socketCliente);
-        return;
-    }
-    rewind(arquivo);
+//função para tratar todas as ações do motorista
+void tratarMotorista(Resposta *resp, cJSON *jsonBody, char *metodo, char *path) {
 
-    if (strcmp(acao, "login") == 0) {
-        loginCliente(jsonLogin, socketCliente, arquivo);
-    } else if (strcmp(acao, "cadastro") == 0) {
-        cadastrarCliente(jsonLogin, socketCliente, arquivo);
-    } else if (strcmp(acao, "buscar_carona") == 0) {
-        buscar_carona(jsonLogin, socketCliente);
-    } else if (strcmp(acao, "selecionar_carona") == 0) {
-        selecionar_carona(jsonLogin, socketCliente);
-    } else if (strcmp(acao, "selecionar_trecho") == 0) {
-        AddTrechoNaRota(jsonLogin, socketCliente);
-    } else if (strcmp(acao, "finalizar_rota") == 0) {
-        finalizar_Rota(jsonLogin, socketCliente);
-    } else if (strcmp(acao, "listar_caronas") == 0) {
-        listar_reservas(jsonLogin, socketCliente);
-    } else if (strcmp(acao, "cancelar_carona") == 0) {
-        cancelar_carona(jsonLogin, socketCliente);
-    } else if (strcmp(acao, "buscar_trechos_partida") == 0) {
-        buscar_trechos_partida(jsonLogin, socketCliente);
-    } else if (strcmp(acao, "listar_avisos") == 0) {
-        listarAvisosCliente(jsonLogin, socketCliente);
-    } else {
-        send(socketCliente, "ACAO_DESCONHECIDA", 17, 0);
+    //POST /api/motoristas/login -> Autenticação do motorista
+    if (strcmp(metodo, "POST") == 0 && strcmp(path, "/api/motoristas/login") == 0) {
+        FILE *arquivo = fopen("dados/loginMotorista.json", "r");
+        if (arquivo == NULL) {
+            enviar_resposta_http(resp, 500, "Internal Server Error", "{\"erro\": \"Erro ao acessar base de dados\"}");
+            return;
+        }
+        loginMotorista(jsonBody, resp, arquivo);
+        fclose(arquivo);
+    } 
+    //POST /api/motoristas/cadastro -> Cadastro de novo motorista (Criação do recurso)
+    else if (strcmp(metodo, "POST") == 0 && strcmp(path, "/api/motoristas/cadastro") == 0) {
+        FILE *arquivo = fopen("dados/loginMotorista.json", "a+");
+        if (arquivo == NULL) {
+            enviar_resposta_http(resp, 500, "Internal Server Error", "{\"erro\": \"Erro ao acessar base de dados\"}");
+            return;
+        }
+        cadastrarMotorista(jsonBody, resp, arquivo);
+        fclose(arquivo);
+    } 
+    //POST /api/motoristas/trechos -> Cadastro de um novo trecho
+    else if (strcmp(metodo, "POST") == 0 && strcmp(path, "/api/motoristas/trechos") == 0) {
+        cadastrarTrecho(jsonBody, resp);
+    } 
+    //GET /api/motoristas/trechos?email=...&nome=... -> Listagem de trechos do motorista
+    else if (strcmp(metodo, "GET") == 0 && strcmp(path, "/api/motoristas/trechos") == 0) {
+        listar_trechos(jsonBody, resp);
+    } 
+    //DELETE /api/motoristas/trechos/{id}?email=...&nome=... -> Cancelamento/remoção de um trecho
+    else if (strcmp(metodo, "DELETE") == 0 && strncmp(path, "/api/motoristas/trechos/", 24) == 0) {
+        int id;
+        if (sscanf(path + 24, "%d", &id) != 1) {
+            enviar_resposta_http(resp, 404, "Not Found", "{\"erro\": \"Recurso nao encontrado\"}");
+            return;
+        }
+        cJSON_AddNumberToObject(jsonBody, "idSelecionado", id);
+        cancelarTrechoMotorista(jsonBody, resp);
+    } 
+    //POST /api/motoristas/rotas -> Cadastro de uma nova rota
+    else if (strcmp(metodo, "POST") == 0 && strcmp(path, "/api/motoristas/rotas") == 0) {
+        cadastrarRota(jsonBody, resp);
+    } 
+    else {
+        enviar_resposta_http(resp, 404, "Not Found", "{\"erro\": \"Recurso nao encontrado\"}");
     }
-    fclose(arquivo);
-    return;
 }
 
-//rotina de tratamento para cada thread
-void *rotinaTratamento(void *arg){
-    int socket = *(int*)arg;
-    free(arg);
-    char buffer_mensagem [8192];
-    cJSON *json = NULL;
-    int desconectar = 0;
-
-    while (1){
-        memset(buffer_mensagem, 0, sizeof(buffer_mensagem));
-        int total = 0;
-        json = NULL;
-
-        /* Acumula os bytes recebidos ate conseguir parsear um JSON completo.
-         * porque uma unica mensagem pode chegar dividida em varios pacotes TCP
-         * (especialmente entre maquinas diferentes), e uma unica chamada
-         * a read() nao garante receber a mensagem inteira de uma vez. */
-        while (json == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
-            ssize_t bytes_lidos = read(socket, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
-            if (bytes_lidos <= 0) {
-                desconectar = 1;
-                break;
-            }
-            total += bytes_lidos;
-            buffer_mensagem[total] = '\0';
-
-            if (strcmp(buffer_mensagem, "DESCONECTADO") == 0) {
-                desconectar = 1;
-                break;
-            }
-
-            json = cJSON_Parse(buffer_mensagem);
-        }
-
-        if (desconectar) {
-            break;
-        }
-
-        if (json == NULL) {
-            log_mensagem(LOG_ERROR, "Erro ao analisar JSON do socket %d: mensagem invalida ou excede o buffer (%d bytes recebidos)", socket, total);
-            close(socket);
-            return NULL;
-        }
-        if (cJSON_GetStringValue(cJSON_GetObjectItem(json, "classe")) != NULL) {
-            const char *classe = cJSON_GetStringValue(cJSON_GetObjectItem(json, "classe"));
-            if (strcmp(classe, "Cliente") == 0) {
-                tratarCliente(socket, json, cJSON_GetStringValue(cJSON_GetObjectItem(json, "acao")));
-            } else if (strcmp(classe, "Motorista") == 0) {
-                tratarMotorista(socket, json, cJSON_GetStringValue(cJSON_GetObjectItem(json, "acao")));
-            } else {
-                printf("Classe desconhecida: %s\n", classe);
-                close(socket);
-                cJSON_Delete(json);
-                return NULL;
-            }
-        } else {
-            printf("Campo 'classe' não encontrado no JSON.\n");
-            close(socket);
-            cJSON_Delete(json);
-            return NULL;
-        }
-        cJSON_Delete(json);
-        fflush(stdout);
-        }
+//função para tratar as ações do cliente
+void tratarCliente(Resposta *resp, cJSON *jsonBody, char *metodo, char *path) {
     
-    log_mensagem(LOG_INFO, "Dispositivo desconectado. Socket ID: %d", socket);
+    //POST /api/clientes/login -> Autenticação do cliente
+    if (strcmp(metodo, "POST") == 0 && strcmp(path, "/api/clientes/login") == 0) {
+        FILE *arquivo = fopen("dados/loginCliente.json", "r");
+        if (arquivo == NULL) {
+            enviar_resposta_http(resp, 500, "Internal Server Error", "{\"erro\": \"Erro ao acessar base de dados\"}");
+            return;
+        }
+        loginCliente(jsonBody, resp, arquivo);
+        fclose(arquivo);
+    } 
+    //POST /api/clientes/cadastro -> Cadastro de novo cliente (Criação de recurso)
+    else if (strcmp(metodo, "POST") == 0 && strcmp(path, "/api/clientes/cadastro") == 0) {
+        FILE *arquivo = fopen("dados/loginCliente.json", "a+");
+        if (arquivo == NULL) {
+            enviar_resposta_http(resp, 500, "Internal Server Error", "{\"erro\": \"Erro ao acessar base de dados\"}");
+            return;
+        }
+        cadastrarCliente(jsonBody, resp, arquivo);
+        fclose(arquivo);
+    } 
+    //GET /api/clientes/caronas?origem=...&destino=...&data=... -> Consulta de caronas disponíveis
+    else if (strcmp(metodo, "GET") == 0 && strcmp(path, "/api/clientes/caronas") == 0) {
+        buscar_carona(jsonBody, resp);
+    } 
+    //POST /api/clientes/reservas -> Criação de uma reserva de carona
+    else if (strcmp(metodo, "POST") == 0 && strcmp(path, "/api/clientes/reservas") == 0) {
+        selecionar_carona(jsonBody, resp);
+    } 
+    //GET /api/clientes/reservas?email=... -> Listagem das reservas do cliente
+    else if (strcmp(metodo, "GET") == 0 && strcmp(path, "/api/clientes/reservas") == 0) {
+        listar_reservas(jsonBody, resp);
+    } 
+    //DELETE /api/clientes/reservas/{id}?emailCliente=...&nomeCliente=... -> Cancelamento de reserva
+    else if (strcmp(metodo, "DELETE") == 0 && strncmp(path, "/api/clientes/reservas/", 23) == 0) {
+        int id;
+        if (sscanf(path + 23, "%d", &id) != 1) {
+            enviar_resposta_http(resp, 404, "Not Found", "{\"erro\": \"Recurso nao encontrado\"}");
+            return;
+        }
+        cJSON_AddNumberToObject(jsonBody, "idSelecionado", id);
+        cancelar_carona(jsonBody, resp);
+    } 
+    //POST /api/clientes/rotas/trechos -> Adição de trecho a uma rota em montagem
+    else if (strcmp(metodo, "POST") == 0 && strcmp(path, "/api/clientes/rotas/trechos") == 0) {
+        AddTrechoNaRota(jsonBody, resp);
+    } 
+    //POST /api/clientes/rotas -> Finalização/criação da rota
+    else if (strcmp(metodo, "POST") == 0 && strcmp(path, "/api/clientes/rotas") == 0) {
+        finalizar_Rota(jsonBody, resp);
+    } 
+    //GET /api/clientes/trechos?origem=... -> Consulta de trechos de partida
+    else if (strcmp(metodo, "GET") == 0 && strcmp(path, "/api/clientes/trechos") == 0) {
+        buscar_trechos_partida(jsonBody, resp);
+    } 
+    //GET /api/clientes/avisos?email=... -> Obtenção de notificações e avisos (somente leitura)
+    else if (strcmp(metodo, "GET") == 0 && strcmp(path, "/api/clientes/avisos") == 0) {
+        listarAvisosCliente(jsonBody, resp);
+    } 
+    //DELETE /api/clientes/avisos?email=... -> Remoção dos avisos já lidos
+    else if (strcmp(metodo, "DELETE") == 0 && strcmp(path, "/api/clientes/avisos") == 0) {
+        apagarAvisosCliente(jsonBody, resp);
+    } 
+    else {
+        enviar_resposta_http(resp, 404, "Not Found", "{\"erro\": \"Recurso nao encontrado\"}");
+    }
+}
+
+//decodifica %XX e '+' de um valor da query string (ex.: joao%40email.com -> joao@email.com)
+static void decodificarURL(char *texto) {
+    char *destino = texto;
+    for (char *origem = texto; *origem != '\0'; origem++) {
+        if (*origem == '%' && isxdigit((unsigned char)origem[1]) && isxdigit((unsigned char)origem[2])) {
+            char hex[3] = {origem[1], origem[2], '\0'};
+            *destino++ = (char)strtol(hex, NULL, 16);
+            origem += 2;
+        } else if (*origem == '+') {
+            *destino++ = ' ';
+        } else {
+            *destino++ = *origem;
+        }
+    }
+    *destino = '\0';
+}
+
+//callback registrado na libmicrohttpd (MHD_OPTION_UNESCAPE_CALLBACK): ela chama esta função para decodificar
+//cada parâmetro da query string, assim o '+' vira espaço
+static size_t unescapeURL(void *cls, struct MHD_Connection *conn, char *texto) {
+    (void)cls; (void)conn;
+    decodificarURL(texto);
+    return strlen(texto);
+}
+
+//a libmicrohttpd chama esta função uma vez para cada parâmetro da query string (?email=a@b.com&nome=Joao)
+//copiamos para o JSON, assim os handlers leem o GET/DELETE do mesmo jeito que leem o corpo dos POST
+static enum MHD_Result coletarParametro(void *cls, enum MHD_ValueKind tipo, const char *chave, const char *valor) {
+    (void)tipo;
+    cJSON *json = (cJSON *)cls;
+    if (chave != NULL && valor != NULL) {
+        cJSON_DeleteItemFromObject(json, chave);
+        cJSON_AddStringToObject(json, chave, valor);
+    }
+    return MHD_YES;
+}
+
+//"comanda" de uma requisição: a libmicrohttpd entrega o corpo em pedaços, então vamos juntando aqui (via *con_cls)
+typedef struct {
+    char *dados;     //corpo acumulado (sempre terminado em '\0')
+    size_t tamanho;
+    int excedeu;     //1 se o corpo passou de MAX_CORPO
+} CorpoReq;
+
+//a libmicrohttpd chama esta função quando a requisição termina (com sucesso ou não): libera a comanda
+static void requisicaoConcluida(void *cls, struct MHD_Connection *conn, void **con_cls,
+                                enum MHD_RequestTerminationCode motivo) {
+    (void)cls; (void)conn; (void)motivo;
+    CorpoReq *corpo = (CorpoReq *)*con_cls;
+    if (corpo != NULL) {
+        free(corpo->dados);
+        free(corpo);
+        *con_cls = NULL;
+    }
+}
+
+//Envia a resposta pela libmicrohttpd: embrulha, etiqueta, despacha e limpa
+static enum MHD_Result enviarPelaMHD(struct MHD_Connection *conn, Resposta *resp) {
+    int status = resp->status != 0 ? resp->status : MHD_HTTP_INTERNAL_SERVER_ERROR;
+    const char *texto = resp->corpo != NULL ? resp->corpo : "{\"erro\": \"Sem resposta\"}";
+
+    struct MHD_Response *resposta = MHD_create_response_from_buffer(strlen(texto), (void *)texto, MHD_RESPMEM_MUST_COPY);
+    if (resposta == NULL) return MHD_NO;
+    MHD_add_response_header(resposta, "Content-Type", "application/json");
+    enum MHD_Result ret = MHD_queue_response(conn, status, resposta);
+    MHD_destroy_response(resposta);
+    return ret;
+}
+
+// Função chamada pela libmicrohttpd a cada requisição (Modelo Stateless REST).
+// Ela é chamada VÁRIAS vezes para a mesma requisição:
+//   1ª chamada: só chegaram método e URL (criamos a comanda);
+//   chamadas seguintes: chegam pedaços do corpo (acumulamos);
+//   última chamada (upload_data_size == 0): corpo completo, aí processamos e respondemos.
+// Cada conexão roda em uma thread própria (MHD_USE_THREAD_PER_CONNECTION)
+static enum MHD_Result tratarRequisicaoHTTP(void *cls, struct MHD_Connection *conn,
+                                            const char *url, const char *method, const char *version,
+                                            const char *upload_data, size_t *upload_data_size, void **con_cls) {
+    (void)cls; (void)version;
+    CorpoReq *corpo = (CorpoReq *)*con_cls;
+    Resposta resp = {0, NULL};
+    enum MHD_Result ret;
+
+    //1ª chamada: cria a comanda
+    if (corpo == NULL) {
+        corpo = calloc(1, sizeof(CorpoReq));
+        if (corpo == NULL) return MHD_NO;
+        *con_cls = corpo;
+        return MHD_YES;
+    }
+
+    //chegou um pedaço do corpo: acumula
+    if (*upload_data_size > 0) {
+        if (!corpo->excedeu) {
+            if (corpo->tamanho + *upload_data_size > MAX_CORPO) {
+                corpo->excedeu = 1;   //continua consumindo os dados (descartando) para a conexão não travar
+            } else {
+                char *novo = realloc(corpo->dados, corpo->tamanho + *upload_data_size + 1);
+                if (novo == NULL) return MHD_NO;
+                corpo->dados = novo;
+                memcpy(corpo->dados + corpo->tamanho, upload_data, *upload_data_size);
+                corpo->tamanho += *upload_data_size;
+                corpo->dados[corpo->tamanho] = '\0';
+            }
+        }
+        *upload_data_size = 0;   //obrigatório: avisa que consumimos os dados
+        return MHD_YES;
+    }
+
+    //corpo completo: daqui para baixo é o processamento da requisição
+    char metodo[16];
+    char path[256];
+    snprintf(metodo, sizeof(metodo), "%s", method);
+    snprintf(path, sizeof(path), "%s", url);   //a libmicrohttpd já separa a query string do path
+
+    if (corpo->excedeu) {
+        log_mensagem(LOG_WARN, "Requisicao %s %s rejeitada: corpo maior que %d bytes", metodo, path, MAX_CORPO);
+        enviar_resposta_http(&resp, 413, "Payload Too Large", "{\"erro\": \"Corpo da requisicao muito grande\"}");
+        ret = enviarPelaMHD(conn, &resp);
+        free(resp.corpo);
+        return ret;
+    }
+
+    //Apenas faz parse do JSON para métodos de modificação/criação
+    cJSON *json = NULL;
+    if ((strcmp(metodo, "POST") == 0 || strcmp(metodo, "PUT") == 0 || strcmp(metodo, "PATCH") == 0)
+        && corpo->tamanho > 0) {
+        json = cJSON_Parse(corpo->dados);
+        if (json == NULL) {
+            log_mensagem(LOG_ERROR, "Payload JSON invalido em %s %s", metodo, path);
+            enviar_resposta_http(&resp, 400, "Bad Request", "{\"erro\": \"Sintaxe JSON invalida\"}");
+            ret = enviarPelaMHD(conn, &resp);
+            free(resp.corpo);
+            return ret;
+        }
+    }
+
+    //GET e DELETE não têm corpo: os parâmetros chegam na query string (?email=...&nome=...).
+    //Eles são copiados para o JSON, que é o que os handlers leem.
+    if (json == NULL) json = cJSON_CreateObject();
+    MHD_get_connection_values(conn, MHD_GET_ARGUMENT_KIND, coletarParametro, json);
+
+    if (strncmp(path, "/api/motoristas", 15) == 0) {
+        tratarMotorista(&resp, json, metodo, path);
+    }
+    else if (strncmp(path, "/api/clientes", 13) == 0) {
+        tratarCliente(&resp, json, metodo, path);
+    } else {
+        enviar_resposta_http(&resp, 404, "Not Found", "{\"erro\": \"Recurso nao encontrado\"}");
+    }
+
+    //Limpeza de memória (Stateless)
+    cJSON_Delete(json);
+
+    log_mensagem(LOG_INFO, "Requisicao %s %s processada. Status %d", metodo, path, resp.status);
     fflush(stdout);
-    close(socket);
-    return NULL;
+
+    ret = enviarPelaMHD(conn, &resp);
+    free(resp.corpo);
+    return ret;
 }
 
 int main(){
-    int socketServidor;
-    int socketCliente;
-    struct sockaddr_in endereco_servidor;
-    struct sockaddr_in endereco_conexao;
-    int limite_clientes = 10;
-    socklen_t tamanho_endereco;
-    int valor_opcao = 1;
     //atualiza o id do trecho
     encontrarID();
     //acerta o contador conforme os arquivos que existem
@@ -1510,41 +1684,21 @@ int main(){
         log_mensagem(LOG_ERROR, "Falha ao criar o grafo de mapa: %m");
         exit(EXIT_FAILURE);
     }
-    
-    //cria o socket do servidor
-    if ((socketServidor = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-        log_mensagem(LOG_ERROR, "Falha ao criar o socket do servidor: %m");
-        exit(EXIT_FAILURE);
+
+    //porta: padrão PORT, ou a variável de ambiente PORT (útil para rodar vários servidores / Docker)
+    unsigned short porta = PORT;
+    const char *portaEnv = getenv("PORT");
+    if (portaEnv != NULL && atoi(portaEnv) > 0 && atoi(portaEnv) < 65536) {
+        porta = (unsigned short)atoi(portaEnv);
     }
 
-    int status = setsockopt(socketServidor, SOL_SOCKET,SO_REUSEADDR , &valor_opcao,sizeof(valor_opcao));
-
-    if(status < 0){
-        log_mensagem(LOG_ERROR, "Falha ao criar o socket do servidor: %m");
-        exit(EXIT_FAILURE);
-    }
-
-    //relaciona o endereço
-    memset(&endereco_servidor, 0, sizeof(endereco_servidor));
-    endereco_servidor.sin_family = AF_INET;
-    endereco_servidor.sin_port = htons(PORT);
-    endereco_servidor.sin_addr.s_addr = INADDR_ANY;
-
-    //ativa o socket 
-    status = bind(socketServidor, (struct sockaddr*)&endereco_servidor, sizeof(struct sockaddr));
-
-    if(status < 0){
-        log_mensagem(LOG_ERROR, "Falha ao criar o socket do servidor: %m");
-        exit(EXIT_FAILURE);
-    }
-
-    //espera outros sockets conectarem
-    status = listen(socketServidor, limite_clientes);
-
-    if(status < 0){
-        log_mensagem(LOG_ERROR, "Falha ao criar esperar dispositivos: %m");
-        exit(EXIT_FAILURE);
-    }
+    //bloqueia SIGINT/SIGTERM nesta thread ANTES de criar as outras (elas herdam o bloqueio),
+    //assim só o main recebe o sinal, via sigwait, lá no final
+    sigset_t sinais;
+    sigemptyset(&sinais);
+    sigaddset(&sinais, SIGINT);
+    sigaddset(&sinais, SIGTERM);
+    pthread_sigmask(SIG_BLOCK, &sinais, NULL);
 
     pthread_t threadLimpeza;
     //cria a thread de limpeza
@@ -1554,39 +1708,36 @@ int main(){
         pthread_detach(threadLimpeza);
     }
 
-    tamanho_endereco = sizeof(endereco_conexao);
-    
-    printf("==================================================\n");
-    printf("        DISPOSITIVOS CONECTADOS NA PORTA %d\n", PORT);
-    printf("==================================================\n");
-    log_mensagem(LOG_INFO, "Servidor iniciado na porta %d", PORT);
+    //liga o servidor HTTP. A libmicrohttpd cuida de socket, bind, listen, accept e do parsing do HTTP.
+    //  INTERNAL_POLLING_THREAD: ela cria a thread que aceita conexões (o main fica livre)
+    //  THREAD_PER_CONNECTION:   cada conexão é atendida em uma thread própria (como no modelo anterior)
+    //  USE_POLL:                usa poll() em vez de select(), sem o limite de 1024 descritores
+    struct MHD_Daemon *servidor = MHD_start_daemon(
+        MHD_USE_INTERNAL_POLLING_THREAD | MHD_USE_THREAD_PER_CONNECTION | MHD_USE_POLL,
+        porta,
+        NULL, NULL,
+        &tratarRequisicaoHTTP, NULL, 
+        MHD_OPTION_NOTIFY_COMPLETED, &requisicaoConcluida, NULL,
+        MHD_OPTION_UNESCAPE_CALLBACK, &unescapeURL, NULL,
+        MHD_OPTION_CONNECTION_TIMEOUT, (unsigned int)30,   //fecha conexões ociosas após 30 s
+        MHD_OPTION_END);
 
-    int i = 0;
-    while (1){
-        //função para aceitar a conexão de outros sockets
-        socketCliente = accept(socketServidor, (struct sockaddr*)&endereco_conexao, &tamanho_endereco);
-        if(socketCliente < 0){
-            log_mensagem(LOG_ERROR, "Falha ao criar o socket do servidor: %m");
-            continue;
-        }
-            
-        log_mensagem(LOG_INFO, "Novo dispositivo conectado. Socket ID: %d", socketCliente);
-
-        int *novo_sock = malloc(sizeof(int));
-        *novo_sock = socketCliente;
-        pthread_t threadID;
-        //cria e coloca a thread para cuidar do socket que chegou (cliente ou motorista)
-        if ((pthread_create(&threadID, NULL, rotinaTratamento, novo_sock)) != 0){
-            log_mensagem(LOG_ERROR, "Falha ao criar a thread para o cliente: %m");
-            free(novo_sock);
-            close(socketCliente);
-        } else {
-            pthread_detach(threadID);
-        }
-        i++;
+    if (servidor == NULL) {
+        log_mensagem(LOG_ERROR, "Falha ao iniciar o servidor HTTP na porta %u", (unsigned)porta);
+        exit(EXIT_FAILURE);
     }
-    //fecha o socket do servidor
-    close(socketServidor);
+
+    printf("==================================================\n");
+    printf("        SERVIDOR REST NA PORTA %u\n", (unsigned)porta);
+    printf("==================================================\n");
+    log_mensagem(LOG_INFO, "Servidor iniciado na porta %u", (unsigned)porta);
+
+    //espera Ctrl+C (SIGINT) ou SIGTERM (docker stop)
+    int sinalRecebido = 0;
+    sigwait(&sinais, &sinalRecebido);
+    log_mensagem(LOG_INFO, "Sinal %d recebido, encerrando o servidor", sinalRecebido);
+
+    MHD_stop_daemon(servidor);
     pthread_mutex_destroy(&logMutex);
     destruirGerenciadorDeTravas();
     return 0;

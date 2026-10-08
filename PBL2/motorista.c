@@ -1,51 +1,175 @@
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <fcntl.h>
-#include "cJSON.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#include <netdb.h>
-#include <signal.h>
+#include <curl/curl.h>   // libcurl: cliente HTTP (substitui socket/connect/read/write)
+#include "cJSON.h"
 #include "formatos.h"
 
-#define PORT 65432
-//função para a requisição de cadastrar
-void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int escolha){
+#define PORT 65432                 // porta padrão do servidor
+#define TIMEOUT_CONEXAO_MS 3000    // tempo máximo para conectar
+#define TIMEOUT_TOTAL_MS   10000   // tempo máximo para a requisição inteira
+
+//URL base do servidor (ex.: http://192.168.0.10:65432), montada no main.
+//Com REST não existe conexão aberta: cada requisição é independente, então só guardamos o endereço.
+static char baseURL[256];
+
+//resposta de uma requisição HTTP: código de status + corpo (alocado com malloc; quem usar libera com free)
+typedef struct {
+    int status;
+    char *corpo;
+} RespostaHTTP;
+
+//---------------------------------------------------------------------------------------------
+// Camada HTTP (libcurl)
+//---------------------------------------------------------------------------------------------
+
+//buffer que a libcurl vai preenchendo conforme o corpo da resposta chega
+typedef struct {
+    char *dados;
+    size_t tamanho;
+} Buffer;
+
+//callback da libcurl: é chamada a cada pedaço do corpo da resposta recebido
+static size_t escreverResposta(char *pedaco, size_t tamanhoItem, size_t qtdItens, void *usuario) {
+    Buffer *buf = (Buffer *)usuario;
+    size_t n = tamanhoItem * qtdItens;
+    char *novo = realloc(buf->dados, buf->tamanho + n + 1);
+    if (novo == NULL) return 0;   //devolver menos que n faz a libcurl abortar com erro
+    buf->dados = novo;
+    memcpy(buf->dados + buf->tamanho, pedaco, n);
+    buf->tamanho += n;
+    buf->dados[buf->tamanho] = '\0';
+    return n;
+}
+
+//faz uma requisição HTTP ao servidor.
+//metodo: "GET", "POST", "DELETE"...  caminho: ex. "/api/motoristas/login"  json: corpo (ou NULL)
+//retorna 1 se o servidor respondeu (resposta em *resp) e 0 se estiver offline / der timeout
+static int chamarAPI(const char *metodo, const char *caminho, const char *json, RespostaHTTP *resp) {
+    resp->status = 0;
+    resp->corpo = NULL;
+
+    CURL *curl = curl_easy_init();
+    if (curl == NULL) return 0;
+
+    char url[1024];
+    snprintf(url, sizeof(url), "%s%s", baseURL, caminho);
+
+    Buffer buf = {NULL, 0};
+    struct curl_slist *cabecalhos = NULL;
+
+    curl_easy_setopt(curl, CURLOPT_URL, url);
+    curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, metodo);
+    if (json != NULL) {
+        cabecalhos = curl_slist_append(cabecalhos, "Content-Type: application/json");
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, cabecalhos);
+        curl_easy_setopt(curl, CURLOPT_POSTFIELDS, json);   //o texto de 'json' precisa continuar válido até o curl_easy_perform (é do chamador, então continua)
+    }
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, escreverResposta);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &buf);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, (long)TIMEOUT_CONEXAO_MS);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, (long)TIMEOUT_TOTAL_MS);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+
+    CURLcode rc = curl_easy_perform(curl);
+
+    int respondeu = 0;
+    if (rc == CURLE_OK) {
+        long codigo = 0;
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &codigo);
+        resp->status = (int)codigo;
+        resp->corpo = buf.dados != NULL ? buf.dados : strdup("");
+        respondeu = 1;
+    } else {
+        free(buf.dados);   //conexão recusada, timeout etc.: servidor offline
+    }
+
+    curl_slist_free_all(cabecalhos);
+    curl_easy_cleanup(curl);
+    return respondeu;
+}
+
+//lê um campo de texto do JSON de resposta (ex.: "erro" ou "nome"). Retorna 1 se achou e 0 se não achou
+static int extrairTexto(const char *corpo, const char *campo, char *destino, size_t tamanho) {
+    destino[0] = '\0';
+    if (corpo == NULL) return 0;
+    cJSON *json = cJSON_Parse(corpo);
+    if (json == NULL) return 0;
+    char *valor = cJSON_GetStringValue(cJSON_GetObjectItem(json, campo));
+    if (valor != NULL) snprintf(destino, tamanho, "%s", valor);
+    cJSON_Delete(json);
+    return valor != NULL;
+}
+
+//codifica um texto para a query string (espaço vira %20, '@' vira %40...)
+static void escaparURL(const char *texto, char *destino, size_t tamanho) {
+    static const char *hex = "0123456789ABCDEF";
+    size_t j = 0;
+    for (size_t i = 0; texto[i] != '\0' && j + 4 < tamanho; i++) {
+        unsigned char c = (unsigned char)texto[i];
+        if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') ||
+            c == '-' || c == '_' || c == '.' || c == '~') {
+            destino[j++] = (char)c;
+        } else {
+            destino[j++] = '%';
+            destino[j++] = hex[c >> 4];
+            destino[j++] = hex[c & 0x0F];
+        }
+    }
+    destino[j] = '\0';
+}
+
+//monta a query string "?email=...&nome=..." que o servidor usa para identificar o motorista (GET/DELETE)
+static void montarQueryMotorista(Motorista *motorista, char *destino, size_t tamanho) {
+    char email[200], nome[200];
+    escaparURL(motorista->email, email, sizeof(email));
+    escaparURL(motorista->nome, nome, sizeof(nome));
+    snprintf(destino, tamanho, "?email=%s&nome=%s", email, nome);
+}
+
+//---------------------------------------------------------------------------------------------
+// Funções do motorista
+//---------------------------------------------------------------------------------------------
+
+//função para a requisição de login (escolha == 1) ou cadastro (escolha == 2)
+//POST /api/motoristas/login      {email, senha}
+//POST /api/motoristas/cadastro   {nome, email, senha}
+//retorna 1 se o servidor respondeu (resposta em *resp, quem chamar libera resp->corpo) e 0 se estiver offline
+int enviarCadastro(char *nome, char *email, char *senha, int escolha, RespostaHTTP *resp){
     cJSON *enviar_dados = cJSON_CreateObject();
     //monta o cjson para a requisição
-    cJSON_AddStringToObject(enviar_dados, "classe", "Motorista");
-    cJSON_AddStringToObject(enviar_dados, "nome", nome ? nome : "");
+    if (escolha == 2) {
+        cJSON_AddStringToObject(enviar_dados, "nome", nome ? nome : "");
+    }
     cJSON_AddStringToObject(enviar_dados, "email", email ? email : "");
     cJSON_AddStringToObject(enviar_dados, "senha", senha ? senha : "");
-    cJSON_AddStringToObject(enviar_dados, "status", "");
-    
-    if (escolha == 1) {
-        cJSON_AddStringToObject(enviar_dados, "acao", "login");
-    } else if (escolha == 2) {
-        cJSON_AddStringToObject(enviar_dados, "acao", "cadastro");
-    }
+
     //transforma a requisição em string
     char *mensagem = cJSON_PrintUnformatted(enviar_dados);
-    //envia a requisição para o servidor
-    if (mensagem != NULL) {
-        write(socketCliente, mensagem, strlen(mensagem));
-        free(mensagem);
-    }
     cJSON_Delete(enviar_dados);
+    if (mensagem == NULL) return 0;
+
+    //envia a requisição para o servidor
+    const char *caminho = (escolha == 1) ? "/api/motoristas/login" : "/api/motoristas/cadastro";
+    int respondeu = chamarAPI("POST", caminho, mensagem, resp);
+    free(mensagem);
+    return respondeu;
 }
 
 //função para enviar uma requisição de cadastrar trecho
+//POST /api/motoristas/trechos
 //retorna 0 se o servidor estiver offline e 1 nos outros casos
-int cadastrarTrecho(int socketMotorista, Motorista *motorista) {
-    char buffer_mensagem[256] = {0};
+int cadastrarTrecho(Motorista *motorista) {
     char origem[50], destino[50];
     char data[11], hora[6];
     int capacidade;
     float preco;
+
+    char *email = motorista->email;
+    if (email == NULL){
+        printf("email inválido!\n");
+        return 1;
+    }
 
     printf("Digite a origem do trecho: ");
     scanf(" %49[^\n]", origem);
@@ -64,22 +188,18 @@ int cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     cJSON *arrayClientes = cJSON_CreateArray();
     if (arrayClientes == NULL){
         printf("Array de clientes nao criado!\n");
+        cJSON_Delete(trecho);
         return 1;
     }
     cJSON *arrayNomesClientes = cJSON_CreateArray();
     if (arrayNomesClientes == NULL){
         printf("Array de nomes de clientes nao criado!\n");
+        cJSON_Delete(arrayClientes);
+        cJSON_Delete(trecho);
         return 1;
     }
 
-    char *email = motorista->email;
-    if (email == NULL){
-        printf("email inválido!\n");
-        return 1;
-    }
     //monta o cjson para a requisição
-    cJSON_AddStringToObject(trecho, "classe", "Motorista");
-    cJSON_AddStringToObject(trecho, "acao", "cadastrar_trecho");
     cJSON_AddStringToObject(trecho, "emailMotorista", email);
     cJSON_AddStringToObject(trecho, "origem", origem);
     cJSON_AddStringToObject(trecho, "destino", destino);
@@ -91,83 +211,69 @@ int cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     cJSON_AddItemToObject(trecho, "clientes", arrayClientes);
     cJSON_AddItemToObject(trecho, "nomesClientes", arrayNomesClientes);
     char *mensagem = cJSON_PrintUnformatted(trecho);
-    //envia a requisição
-    if (mensagem != NULL) {
-        write(socketMotorista, mensagem, strlen(mensagem));
-        free(mensagem);
-    }
     cJSON_Delete(trecho);
+    if (mensagem == NULL) return 1;
 
-    ssize_t bytes = read(socketMotorista, buffer_mensagem, sizeof(buffer_mensagem) - 1);
-    if (bytes > 0) {
-        buffer_mensagem[bytes] = '\0';
-        if (strcmp(buffer_mensagem, "TRECHO_CADASTRADO") == 0) {
-            printf("Trecho cadastrado com sucesso!\n");
-        } else {
-            printf("Falha ao cadastrar trecho, caminho possivel nao encontrado\n");
-        }
-    } else {
+    //envia a requisição
+    RespostaHTTP resp;
+    int respondeu = chamarAPI("POST", "/api/motoristas/trechos", mensagem, &resp);
+    free(mensagem);
+
+    if (!respondeu) {
         printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
         return 0;
     }
+
+    if (resp.status == 201) {
+        printf("Trecho cadastrado com sucesso!\n");
+    } else {
+        char erro[200];
+        extrairTexto(resp.corpo, "erro", erro, sizeof(erro));
+        if (strcmp(erro, "Caminho nao encontrado") == 0) {
+            printf("Falha ao cadastrar trecho, caminho possivel nao encontrado\n");
+        } else {
+            printf("Falha ao cadastrar trecho (HTTP %d): %s\n", resp.status, erro[0] ? erro : "erro desconhecido");
+        }
+    }
+    free(resp.corpo);
     return 1;
 }
 
 //função para cadastrar n trechos
-void cadastrarTrechos(int socketMotorista, Motorista *motorista) {
+void cadastrarTrechos(Motorista *motorista) {
     int quantidade;
     printf("Digite a quantidade de trechos que deseja cadastrar: ");
     scanf("%d", &quantidade);
 
     for (int i = 0; i < quantidade; i++) {
         printf("Cadastro do trecho %d:\n", i + 1);
-        if (!cadastrarTrecho(socketMotorista, motorista)) {
+        if (!cadastrarTrecho(motorista)) {
             break; //servidor offline, não adianta tentar os próximos trechos
         }
     }
 }
 
 //função para fazer uma requisição para listar os trechos do motorista
+//GET /api/motoristas/trechos?email=...&nome=...
 //retorna a quantidade de trechos listados, ou -1 se o servidor estiver offline/houver erro
-int listarTrechos(int socketMotorista, Motorista *motorista){
-    char buffer_mensagem[4096] = {0};
-    int total = 0;
-    int servidorOffline = 0;
+int listarTrechos(Motorista *motorista){
+    char query[450];
+    char caminho[500];
+    montarQueryMotorista(motorista, query, sizeof(query));
+    snprintf(caminho, sizeof(caminho), "/api/motoristas/trechos%s", query);
 
-    cJSON *enviar_dados = cJSON_CreateObject();
-    cJSON_AddStringToObject(enviar_dados, "classe", "Motorista");
-    cJSON_AddStringToObject(enviar_dados, "nome", motorista->nome);
-    cJSON_AddStringToObject(enviar_dados, "email", motorista->email);
-    cJSON_AddStringToObject(enviar_dados, "senha", motorista->senha);
-    cJSON_AddStringToObject(enviar_dados, "acao", "listar_trechos");
-
-    char *mensagem = cJSON_PrintUnformatted(enviar_dados);
-    if (mensagem != NULL) {
-        write(socketMotorista, mensagem, strlen(mensagem));
-        free(mensagem);
-    }
-    cJSON_Delete(enviar_dados);
-
-    cJSON *arrayResposta = NULL;
-    while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
-        ssize_t bytes = read(socketMotorista, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
-        if (bytes <= 0) {
-            servidorOffline = 1;
-            break;
-        }
-        total += bytes;
-        buffer_mensagem[total] = '\0';
-        arrayResposta = cJSON_Parse(buffer_mensagem);
-    }
-
-    if (servidorOffline) {
+    RespostaHTTP resp;
+    if (!chamarAPI("GET", caminho, NULL, &resp)) {
         printf("O SERVIDOR ESTA OFFLINE\n");
-        cJSON_Delete(arrayResposta);
         return -1;
     }
 
-    if (arrayResposta == NULL) {
+    cJSON *arrayResposta = (resp.status == 200) ? cJSON_Parse(resp.corpo) : NULL;
+    free(resp.corpo);
+
+    if (arrayResposta == NULL || !cJSON_IsArray(arrayResposta)) {
         printf("Erro ao obter lista de trechos.\n");
+        cJSON_Delete(arrayResposta);
         return -1;
     }
 
@@ -190,10 +296,10 @@ int listarTrechos(int socketMotorista, Motorista *motorista){
         char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(item, "hora"));
         printf("====================================\n");
         printf("ID: %d\n", id);
-        printf("Origem: %s\n", cidadeOrigem);
-        printf("Destino: %s\n", cidadeDestino);
-        printf("Data: %s\n", data);
-        printf("Hora: %s\n", hora);
+        printf("Origem: %s\n", cidadeOrigem ? cidadeOrigem : "?");
+        printf("Destino: %s\n", cidadeDestino ? cidadeDestino : "?");
+        printf("Data: %s\n", data ? data : "?");
+        printf("Hora: %s\n", hora ? hora : "?");
         printf("Capacidade: %d\n", capacidade);
         printf("Passageiros: ");
         cJSON *arrayNomesClientes = cJSON_GetObjectItem(item, "nomesClientes");
@@ -217,8 +323,9 @@ int listarTrechos(int socketMotorista, Motorista *motorista){
 }
 
 //função para a requisição de cancelar um trecho do motorista
-void cancelarTrecho(int socketMotorista, Motorista *motorista){
-    if (listarTrechos(socketMotorista, motorista) <= 0) {
+//DELETE /api/motoristas/trechos/{id}?email=...&nome=...
+void cancelarTrecho(Motorista *motorista){
+    if (listarTrechos(motorista) <= 0) {
         return; //servidor offline, erro ou nenhum trecho para cancelar
     }
 
@@ -232,47 +339,44 @@ void cancelarTrecho(int socketMotorista, Motorista *motorista){
         printf("email inválido!\n");
         return;
     }
-    cJSON *cancelar = cJSON_CreateObject();
-    cJSON_AddStringToObject(cancelar, "classe", "Motorista");
-    cJSON_AddStringToObject(cancelar, "acao", "cancelar_trecho");
-    cJSON_AddStringToObject(cancelar, "nome", motorista->nome);
-    cJSON_AddStringToObject(cancelar, "email", email);
-    cJSON_AddNumberToObject(cancelar, "idSelecionado", idSelecionado);
-    char *mensagem = cJSON_PrintUnformatted(cancelar);
-    if (mensagem != NULL) {
-        write(socketMotorista, mensagem, strlen(mensagem));
-        free(mensagem);
-    }
-    cJSON_Delete(cancelar);
 
-    char buffer_mensagem[32] = {0};
-    int bytes = read(socketMotorista, buffer_mensagem, sizeof(buffer_mensagem) - 1);
-    if (bytes > 0) {
-        buffer_mensagem[bytes] = '\0';
-        if (strcmp(buffer_mensagem, "TRECHO_CANCELADO") == 0) {
-            printf("Trecho cancelado com sucesso!\n");
-        } else {
-            printf("Trecho nao encontrado.\n");
-        }
-    } else {
+    //o id vai no caminho e o motorista é identificado pela query string
+    char query[450];
+    char caminho[550];
+    montarQueryMotorista(motorista, query, sizeof(query));
+    snprintf(caminho, sizeof(caminho), "/api/motoristas/trechos/%d%s", idSelecionado, query);
+
+    RespostaHTTP resp;
+    if (!chamarAPI("DELETE", caminho, NULL, &resp)) {
         printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+        return;
     }
+
+    if (resp.status == 200) {
+        printf("Trecho cancelado com sucesso!\n");
+    } else if (resp.status == 404) {
+        printf("Trecho nao encontrado.\n");
+    } else {
+        printf("Falha ao cancelar trecho (HTTP %d).\n", resp.status);
+    }
+    free(resp.corpo);
 }
 
 //requisição para cadastrar uma rota do motorista
-void cadastrarRotaMotorista(int socketMotorista, Motorista *motorista){
+//POST /api/motoristas/rotas
+void cadastrarRotaMotorista(Motorista *motorista){
+    char *email = motorista->email;
+    if (email == NULL){
+        printf("email inválido!\n");
+        return;
+    }
+
     cJSON *arrayTrechos = cJSON_CreateArray();
     if (arrayTrechos == NULL) { printf("Erro ao criar objeto JSON\n"); return; }
 
     char destinoAnterior[50] = {0};
     int totalAdicionados = 0;
     int sair = 0;
-
-    char *email = motorista->email;
-    if (email == NULL){
-        printf("email inválido!\n");
-        return;
-    }
 
     while (!sair) {
         char origem[50], destino[50];
@@ -334,46 +438,45 @@ void cadastrarRotaMotorista(int socketMotorista, Motorista *motorista){
     }
     //criar um cjson final que contem o array de trechos da rota para a requisiçao
     cJSON *pedido = cJSON_CreateObject();
-    cJSON_AddStringToObject(pedido, "classe", "Motorista");
-    cJSON_AddStringToObject(pedido, "acao", "cadastrar_rota");
     cJSON_AddStringToObject(pedido, "nome", motorista->nome);
     cJSON_AddItemToObject(pedido, "trechos", arrayTrechos);
     //transforma em string
     char *mensagem = cJSON_PrintUnformatted(pedido);
-    //envia a requisição para o servidor
-    if (mensagem != NULL) {
-        write(socketMotorista, mensagem, strlen(mensagem));
-        free(mensagem);
-    }
     cJSON_Delete(pedido);
+    if (mensagem == NULL) return;
 
-    char buffer_mensagem[50] = {0};
-    int bytes = read(socketMotorista, buffer_mensagem, sizeof(buffer_mensagem) - 1);
+    //envia a requisição para o servidor
+    RespostaHTTP resp;
+    int respondeu = chamarAPI("POST", "/api/motoristas/rotas", mensagem, &resp);
+    free(mensagem);
 
-    if (bytes <= 0) {
+    if (!respondeu) {
         printf("ERRO: SERVIDOR OFFLINE\n");
         return;
     }
 
-    if (bytes > 0) {
-        buffer_mensagem[bytes] = '\0';
-        if (strcmp(buffer_mensagem, "ROTA_CADASTRADA") == 0) {
-            printf("Rota cadastrada com sucesso!\n");
-        } else if (strcmp(buffer_mensagem, "ROTA_DESCONECTADA") == 0) {
+    if (resp.status == 201) {
+        printf("Rota cadastrada com sucesso!\n");
+    } else {
+        //nos erros o servidor manda {"erro": "<CODIGO>"}
+        char erro[200];
+        extrairTexto(resp.corpo, "erro", erro, sizeof(erro));
+        if (strcmp(erro, "ROTA_DESCONECTADA") == 0) {
             printf("Os trechos nao formam uma rota conectada.\n");
-        } else if (strcmp(buffer_mensagem, "FALHA_CADASTRO_ROTA") == 0) {
+        } else if (strcmp(erro, "FALHA_CADASTRO_ROTA") == 0) {
             printf("Um ou mais trechos nao tem caminho possivel no mapa.\n");
+        } else if (strcmp(erro, "ROTA_INVALIDA") == 0) {
+            printf("Rota invalida: ha trechos com dados incompletos.\n");
         } else {
-            printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
+            printf("Resposta desconhecida do servidor (HTTP %d): %s\n", resp.status, erro[0] ? erro : resp.corpo);
         }
     }
+    free(resp.corpo);
 }
 
-void telaMenu(int socketMotorista, Motorista *motorista){
-    char buffer_mensagem[18] = {0};
+void telaMenu(Motorista *motorista){
     int escolha = 0;
     int sair = 0;
-    int enviou = 0;
 
     while(sair != 1){
         printf("====================================\n");
@@ -390,15 +493,15 @@ void telaMenu(int socketMotorista, Motorista *motorista){
         scanf("%d", &escolha);
 
         if (escolha == 1) {
-            cadastrarTrecho(socketMotorista, motorista);
+            cadastrarTrecho(motorista);
         } else if (escolha == 2) {
-            cadastrarTrechos(socketMotorista, motorista);
+            cadastrarTrechos(motorista);
         } else if (escolha == 3) {
-            listarTrechos(socketMotorista, motorista);
+            listarTrechos(motorista);
         } else if (escolha == 4) {
-            cancelarTrecho(socketMotorista, motorista);
+            cancelarTrecho(motorista);
         } else if (escolha == 5) {
-            cadastrarRotaMotorista(socketMotorista, motorista);
+            cadastrarRotaMotorista(motorista);
         } else if (escolha == 6) {
             sair = 1;
         } else {
@@ -407,16 +510,17 @@ void telaMenu(int socketMotorista, Motorista *motorista){
     }
 }
 
-void telaLogin(int socketMotorista, Motorista *motorista){
-    char buffer_mensagem[50] = {0};
+void telaLogin(Motorista *motorista){
     int escolha = 0;
     int sair = 0;
     int enviou = 0;
     int c = 0;
+    RespostaHTTP resp = {0, NULL};
+    int respondeu = 0;
     while (( c = getchar()) != '\n' && c != EOF);
 
     while(sair != 1){
-        
+
         printf("====================================\n");
         printf("                Login               \n");
         printf("====================================\n");
@@ -435,7 +539,7 @@ void telaLogin(int socketMotorista, Motorista *motorista){
             printf("Digite sua senha: ");
             scanf(" %49[^\n]", motorista->senha);
         } else if (escolha == 3) {
-            enviarCadastro(socketMotorista, motorista->nome, motorista->email, motorista->senha, 1);
+            respondeu = enviarCadastro(motorista->nome, motorista->email, motorista->senha, 1, &resp);
             enviou = 1;
             break;
         } else if (escolha == 4) {
@@ -449,36 +553,40 @@ void telaLogin(int socketMotorista, Motorista *motorista){
         return;
     }
 
-    int bytes = read(socketMotorista, buffer_mensagem, sizeof(buffer_mensagem) - 1);
-    if (bytes > 0) {
-        buffer_mensagem[bytes] = '\0';
-        if (strcmp(buffer_mensagem, "NAO_AUTENTICADO") == 0) {
-            printf("Email ou senha incorretos. Tente novamente.\n");
-            telaLogin(socketMotorista, motorista);
+    if (!respondeu) {
+        printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+        return;
+    }
+
+    if (resp.status == 401) {
+        printf("Email ou senha incorretos. Tente novamente.\n");
+        free(resp.corpo);
+        telaLogin(motorista);
+        return;
+    }
+
+    if (resp.status == 200) {
+        char nome[50];
+        if (extrairTexto(resp.corpo, "nome", nome, sizeof(nome))){
+            printf("Login realizado com sucesso!\n");
+            motorista->status = AUTENTICADO;
+            strncpy(motorista->nome, nome, sizeof(motorista->nome) - 1);
+            motorista->nome[sizeof(motorista->nome) - 1] = '\0';
+            free(resp.corpo);
+            telaMenu(motorista);
             return;
         }
-        cJSON *respostaJSON = cJSON_Parse(buffer_mensagem);
-        if (respostaJSON != NULL){
-            char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(respostaJSON, "nome"));
-            if (nome != NULL){
-                printf("Login realizado com sucesso!\n");
-                motorista->status = AUTENTICADO;
-                strncpy(motorista->nome, nome, sizeof(motorista->nome) - 1);
-                motorista->nome[sizeof(motorista->nome) - 1] = '\0';
-                telaMenu(socketMotorista, motorista);
-            }
-            cJSON_Delete(respostaJSON);
-        }
-    } else {
-        printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
     }
+    printf("Resposta inesperada do servidor (HTTP %d)\n", resp.status);
+    free(resp.corpo);
 }
 
-void telaCadastro(int socketMotorista, Motorista *motorista){
+void telaCadastro(Motorista *motorista){
     int escolha = 0;
-    char buffer_mensagem[20] = {0};
     int sair = 0;
     int enviou = 0;
+    RespostaHTTP resp = {0, NULL};
+    int respondeu = 0;
     while(sair != 1){
         printf("====================================\n");
         printf("              Cadastro              \n");
@@ -502,7 +610,7 @@ void telaCadastro(int socketMotorista, Motorista *motorista){
             printf("Digite sua senha: ");
             scanf(" %49[^\n]", motorista->senha);
         } else if (escolha == 4) {
-            enviarCadastro(socketMotorista, motorista->nome, motorista->email, motorista->senha, 2);
+            respondeu = enviarCadastro(motorista->nome, motorista->email, motorista->senha, 2, &resp);
             enviou = 1;
             break;
         } else if (escolha == 5) {
@@ -516,24 +624,26 @@ void telaCadastro(int socketMotorista, Motorista *motorista){
         return;
     }
 
-    ssize_t bytes = read(socketMotorista, buffer_mensagem, 20);
-    if (bytes > 0) {
-        buffer_mensagem[bytes] = '\0';
-        if (strcmp(buffer_mensagem, "EMAIL_JA_CADASTRADO") == 0) {
-            printf("Email ja cadastrado. Tente novamente.\n");
-            telaCadastro(socketMotorista, motorista);
-        } else if (strcmp(buffer_mensagem, "CADASTRO_REALIZADO") == 0) {
-            printf("Cadastro realizado com sucesso!\n");
-            motorista->status = AUTENTICADO;
-        } else {
-            printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
-        }
-    } else {
+    if (!respondeu) {
         printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+        return;
     }
+
+    if (resp.status == 409) {
+        printf("Email ja cadastrado. Tente novamente.\n");
+        free(resp.corpo);
+        telaCadastro(motorista);
+        return;
+    } else if (resp.status == 201) {
+        printf("Cadastro realizado com sucesso!\n");
+        motorista->status = AUTENTICADO;
+    } else {
+        printf("Resposta desconhecida do servidor (HTTP %d): %s\n", resp.status, resp.corpo);
+    }
+    free(resp.corpo);
 }
 
-void telaInicial(int socketMotorista, Motorista *motorista){
+void telaInicial(Motorista *motorista){
     int sair = 0;
     while (!sair) {
         int opcao = 0;
@@ -549,14 +659,14 @@ void telaInicial(int socketMotorista, Motorista *motorista){
 
         switch (opcao) {
             case 1:
-                telaLogin(socketMotorista, motorista);
+                telaLogin(motorista);
                 break;
             case 2:
-                telaCadastro(socketMotorista, motorista);
+                telaCadastro(motorista);
                 break;
             case 3:
+                //REST não mantém conexão aberta, então não há o que avisar ao servidor ao sair
                 printf("Saindo...\n");
-                send(socketMotorista, "DESCONECTADO", 13, 0);
                 motorista->status = DESCONECTADO;
                 sair = 1;
                 break;
@@ -568,59 +678,38 @@ void telaInicial(int socketMotorista, Motorista *motorista){
 }
 
 int main(){
-    //signal para o programa não encerrar caso o servidor feche a conexão
-    signal(SIGPIPE, SIG_IGN);
-    int socketMotorista;
-    struct sockaddr_in endereco_servidor;
-    char buffer_mensagem[81] = {0};
-    
     Motorista *motorista = calloc(1, sizeof(Motorista));
-    //cria o socket do motorista
-    if ((socketMotorista = socket(AF_INET, SOCK_STREAM, 0)) < 0){
-        perror("Socket nao criado");
-        free(motorista);
+    if (motorista == NULL) {
+        perror("Memoria insuficiente");
         exit(EXIT_FAILURE);
     }
-    //relaciona o endereço
-    memset(&endereco_servidor, 0, sizeof(endereco_servidor));
-    endereco_servidor.sin_family = AF_INET;
-    endereco_servidor.sin_port = htons(PORT);
 
     char ip_servidor[100];
-    
-    printf("Digite o IP do servidor: ");
+    printf("Digite o IP do servidor (ou ip:porta): ");
     scanf("%99s", ip_servidor);
 
-    struct hostent *host = gethostbyname(ip_servidor);
-    if (host == NULL) {
-        perror("Erro ao resolver nome do host");
-        free(motorista);
-        close(socketMotorista);
-        exit(EXIT_FAILURE);
-    }
-
-    memcpy(&endereco_servidor.sin_addr, host->h_addr_list[0], host->h_length);
-    //conecta ao servidor
-    int status = connect(socketMotorista, (struct sockaddr*)&endereco_servidor, sizeof(endereco_servidor));
-
-    if (status < 0){
-        perror("conexao com o servidor nao estabelecida");
-        free(motorista);
-        close(socketMotorista);
-        exit(EXIT_FAILURE);
-    }
-
-    telaInicial(socketMotorista, motorista);
-    
-    ssize_t bytes = read(socketMotorista, buffer_mensagem, 80);
-    if (bytes > 0) {
-        buffer_mensagem[bytes] = '\0';
-        printf("Mensagem do servidor: %s\n", buffer_mensagem);
+    //monta a URL base: se o usuário já informou a porta usa ela, senão usa a porta padrão
+    if (strchr(ip_servidor, ':') != NULL) {
+        snprintf(baseURL, sizeof(baseURL), "http://%s", ip_servidor);
     } else {
-        printf("O SERVIDOR ESTA OFFLINE\n");
+        snprintf(baseURL, sizeof(baseURL), "http://%s:%d", ip_servidor, PORT);
     }
-    
+
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+
+    //teste de alcance: qualquer resposta HTTP (mesmo 404) prova que o servidor está no ar
+    RespostaHTTP teste;
+    if (!chamarAPI("GET", "/api/motoristas", NULL, &teste)) {
+        printf("conexao com o servidor nao estabelecida (%s)\n", baseURL);
+        free(motorista);
+        curl_global_cleanup();
+        exit(EXIT_FAILURE);
+    }
+    free(teste.corpo);
+
+    telaInicial(motorista);
+
     free(motorista);
-    close(socketMotorista);
+    curl_global_cleanup();
     return 0;
 }
