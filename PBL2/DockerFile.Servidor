@@ -11,7 +11,7 @@ COPY . .
 RUN mkdir -p logs trechosCadastrados dados
 
 # Compilar o servidor com as dependências necessárias (incluindo threads e cJSON)
-RUN gcc servidor.c cJSON.c grafomapa.c -o servidor_bin -pthread
+RUN gcc servidor.c cJSON.c grafomapa.c -o servidor_bin -lmicrohttpd -pthread
 
 # Expor a porta utilizada pelo servidor
 EXPOSE 65432
