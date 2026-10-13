@@ -8,12 +8,13 @@
 #include <time.h>
 #include <stdarg.h>
 #include <sys/types.h>
+#include <sys/stat.h>
+#include <errno.h>
 #include <microhttpd.h>
 #include "cJSON.h"
 #include "grafomapa.h"
 
-#define PORT 65432
-//tamanho máximo aceito para o corpo de uma requisição
+#define PORT 65432 
 #define MAX_CORPO (64 * 1024)
 
 //grafo do mapa para verificação de caminhos
@@ -39,9 +40,6 @@ TrechoLock travasTrechos[MAX_TRECHOS];
 pthread_mutex_t gerencialTrechosMutex = PTHREAD_MUTEX_INITIALIZER;
 
 // Função para inicializar/pegar o mutex de um trecho específico
-// Os ids dos trechos só crescem, então a posição no vetor é id % MAX_TRECHOS (depois de MAX_TRECHOS ids a posição é reaproveitada).
-// Dois ids só dividem o mesmo mutex se diferirem por múltiplo de MAX_TRECHOS, o que é inofensivo porque
-// nenhuma função segura o mutex de mais de um trecho ao mesmo tempo.
 pthread_mutex_t* obterMutexTrecho(int idTrecho) {
     if (idTrecho < 0) {
         return NULL;
@@ -382,9 +380,11 @@ void cadastrarCliente(cJSON *jsonLogin, Resposta *resp, FILE *arquivoLogin){
     int emailEncontrado = 0;
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
+    char *senhaCadastro = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "senha"));
 
-    if (emailBuscado == NULL || nome == NULL) {
-        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Dados incompletos para cadastro de cliente\"}");
+    //Verifica se os campos obrigatórios estão presentes; sem eles o strcmp abaixo receberia NULL e derrubaria o servidor inteiro
+    if (emailBuscado == NULL || nome == NULL || senhaCadastro == NULL) {
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Dados incompletos para cadastro\"}");
         return;
     }
 
@@ -395,7 +395,7 @@ void cadastrarCliente(cJSON *jsonLogin, Resposta *resp, FILE *arquivoLogin){
         cJSON *dadosJson = cJSON_Parse(dadosLogin);
         if(dadosJson != NULL) {
             char *email = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "email"));
-            if (strcmp(email, emailBuscado) == 0) {
+            if (email != NULL && strcmp(email, emailBuscado) == 0) {
                 enviar_resposta_http(resp, 409, "Conflict", "{\"erro\": \"Email ja cadastrado\"}");
                 emailEncontrado = 1;
                 break;
@@ -421,9 +421,11 @@ void cadastrarMotorista(cJSON *jsonLogin, Resposta *resp, FILE *arquivo){
     char dadosLogin[1024] = {0};
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
+    char *senhaCadastro = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "senha"));
 
-    if (emailBuscado == NULL || nome == NULL) {
-        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Dados incompletos para cadastro de motorista\"}");
+    //Verifica se os campos obrigatórios estão presentes; sem eles o strcmp abaixo receberia NULL e derrubaria o servidor inteiro
+    if (emailBuscado == NULL || nome == NULL || senhaCadastro == NULL) {
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Dados incompletos para cadastro\"}");
         return;
     }
 
@@ -434,7 +436,7 @@ void cadastrarMotorista(cJSON *jsonLogin, Resposta *resp, FILE *arquivo){
         cJSON *dadosJson = cJSON_Parse(dadosLogin);
         if(dadosJson != NULL) {
             char *email = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "email"));
-            if (strcmp(email, emailBuscado) == 0) {
+            if (email != NULL && strcmp(email, emailBuscado) == 0) {
                 enviar_resposta_http(resp, 409, "Conflict", "{\"erro\": \"Email ja cadastrado\"}");
                 emailEncontrado = 1;
                 break;
@@ -574,8 +576,9 @@ void loginMotorista(cJSON *jsonLogin, Resposta *resp, FILE *arquivo){
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *senhaBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "senha"));
 
+    //Verifica se os campos obrigatórios estão presentes; sem eles o strcmp abaixo receberia NULL e derrubaria o servidor inteiro
     if (emailBuscado == NULL || senhaBuscada == NULL) {
-        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Dados incompletos para login de motorista\"}");
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Email e senha sao obrigatorios\"}");
         return;
     }
 
@@ -587,7 +590,7 @@ void loginMotorista(cJSON *jsonLogin, Resposta *resp, FILE *arquivo){
         if(dadosJson != NULL) {
         char *email = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "email"));
         char *senha = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "senha"));
-        if (strcmp(email, emailBuscado) == 0 && strcmp(senha, senhaBuscada) == 0) {
+        if (email != NULL && senha != NULL && strcmp(email, emailBuscado) == 0 && strcmp(senha, senhaBuscada) == 0) {
             char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson,"nome"));
             cJSON *respostaJson = cJSON_CreateObject();
             if (respostaJson != NULL){
@@ -1002,8 +1005,9 @@ void loginCliente(cJSON *jsonLogin, Resposta *resp, FILE *arquivoLogin){
     char *emailBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     char *senhaBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "senha"));
 
+    //Verifica se os campos obrigatórios estão presentes; sem eles o strcmp abaixo receberia NULL e derrubaria o servidor inteiro
     if (emailBuscado == NULL || senhaBuscada == NULL) {
-        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Dados incompletos para login de cliente\"}");
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Email e senha sao obrigatorios\"}");
         return;
     }
 
@@ -1015,7 +1019,7 @@ void loginCliente(cJSON *jsonLogin, Resposta *resp, FILE *arquivoLogin){
         if(dadosJson != NULL) {
             char *email = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "email"));
             char *senha = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson, "senha"));
-            if (strcmp(email, emailBuscado) == 0 && strcmp(senha, senhaBuscada) == 0) {
+            if (email != NULL && senha != NULL && strcmp(email, emailBuscado) == 0 && strcmp(senha, senhaBuscada) == 0) {
                 char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(dadosJson,"nome"));
                 cJSON *respostaJson = cJSON_CreateObject();
                 if (respostaJson != NULL){
@@ -1046,6 +1050,12 @@ void buscar_carona(cJSON *jsonLogin, Resposta *resp){
     char *origemBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origem"));
     char *destinoBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "destino"));
     char *dataBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "data"));
+
+    // Verifica se os campos obrigatórios estão presentes
+    if (origemBuscada == NULL || destinoBuscado == NULL || dataBuscada == NULL) {
+        enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"Preencha todos os campos obrigatórios\"}");
+        return;
+    }
 
     int limite = lerLimiteIdTrechos();
     for (int i = 0; i < limite; i++) {
@@ -1231,7 +1241,7 @@ void finalizar_Rota(cJSON *jsonLogin, Resposta *resp){
     char *origemRota = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origemRota"));
 
     cJSON *rota = cJSON_GetObjectItem(jsonLogin, "rota");
-    if (rota == NULL){
+    if (rota == NULL || !cJSON_IsArray(rota) || origemRota == NULL || destinoRota == NULL){
         printf("Objeto rotas nao criado!\n");
         enviar_resposta_http(resp, 400, "Bad Request", "{\"erro\": \"ROTA_INVALIDA\"}");
         return;
@@ -1249,11 +1259,14 @@ void finalizar_Rota(cJSON *jsonLogin, Resposta *resp){
         int idTrecho = cJSON_GetNumberValue(cJSON_GetObjectItem(trecho, "id"));
         char *destino = cJSON_GetStringValue(cJSON_GetObjectItem(trecho, "destino"));
         char *origem = cJSON_GetStringValue(cJSON_GetObjectItem(trecho, "origem"));
+        //trecho sem origem/destino: ignora (a rota vai falhar na conferência abaixo)
+        if (origem == NULL || destino == NULL) continue;
+        
         if (i == 0){
-            strcpy(origemTemporaria, origem);
+            snprintf(origemTemporaria, sizeof(origemTemporaria), "%s", origem);
         }
         if (existeCaminhoBFSPorNome(mapa, origem, destino)){
-            strcpy(destinoTemporario, destino);
+            snprintf(destinoTemporario, sizeof(destinoTemporario), "%s", destino);
         }
     }
 
@@ -1529,7 +1542,6 @@ static void decodificarURL(char *texto) {
 }
 
 //callback registrado na libmicrohttpd (MHD_OPTION_UNESCAPE_CALLBACK): ela chama esta função para decodificar
-//cada parâmetro da query string, assim o '+' vira espaço
 static size_t unescapeURL(void *cls, struct MHD_Connection *conn, char *texto) {
     (void)cls; (void)conn;
     decodificarURL(texto);
@@ -1585,7 +1597,6 @@ static enum MHD_Result enviarPelaMHD(struct MHD_Connection *conn, Resposta *resp
 //   1ª chamada: só chegaram método e URL (criamos a comanda);
 //   chamadas seguintes: chegam pedaços do corpo (acumulamos);
 //   última chamada (upload_data_size == 0): corpo completo, aí processamos e respondemos.
-// Cada conexão roda em uma thread própria (MHD_USE_THREAD_PER_CONNECTION)
 static enum MHD_Result tratarRequisicaoHTTP(void *cls, struct MHD_Connection *conn,
                                             const char *url, const char *method, const char *version,
                                             const char *upload_data, size_t *upload_data_size, void **con_cls) {
@@ -1673,7 +1684,51 @@ static enum MHD_Result tratarRequisicaoHTTP(void *cls, struct MHD_Connection *co
     return ret;
 }
 
+//cria uma pasta se ela ainda não existir. Retorna 1 se a pasta existe ao final e 0 em caso de erro
+static int garantirPasta(const char *caminho) {
+    struct stat info;
+    if (stat(caminho, &info) == 0) {
+        if (S_ISDIR(info.st_mode)) return 1;
+        fprintf(stderr, "Erro: '%s' existe mas nao e uma pasta\n", caminho);
+        return 0;
+    }
+    if (mkdir(caminho, 0755) != 0 && errno != EEXIST) {
+        fprintf(stderr, "Erro ao criar a pasta '%s': %s\n", caminho, strerror(errno));
+        return 0;
+    }
+    return 1;
+}
+
+//cria um arquivo com o conteúdo inicial (NULL = vazio) SOMENTE se ele ainda não existir; nunca sobrescreve dados
+static int garantirArquivo(const char *caminho, const char *conteudoInicial) {
+    if (access(caminho, F_OK) == 0) return 1;
+    FILE *arquivo = fopen(caminho, "w");
+    if (arquivo == NULL) {
+        fprintf(stderr, "Erro ao criar o arquivo '%s': %s\n", caminho, strerror(errno));
+        return 0;
+    }
+    if (conteudoInicial != NULL) fputs(conteudoInicial, arquivo);
+    return fclose(arquivo) == 0;
+}
+
+//prepara tudo que o servidor precisa no disco. Roda antes de qualquer outra coisa, então o servidor sobe
+//sozinho na primeira execução (por exemplo, dentro de um contêiner Docker novo). Retorna 1 se está tudo pronto
+static int prepararArmazenamento(void) {
+    const char *pastas[] = {"dados", DIR_TRECHOS, "ArquivoID", "logs", "Avisos"};
+    for (size_t i = 0; i < sizeof(pastas) / sizeof(pastas[0]); i++) {
+        if (!garantirPasta(pastas[i])) return 0;
+    }
+    return garantirArquivo(ARQ_ID, "0")
+        && garantirArquivo(ARQ_CONTADOR, "0")
+        && garantirArquivo("dados/loginMotorista.json", NULL)
+        && garantirArquivo("dados/loginCliente.json", NULL);
+}
+
 int main(){
+    //cria as pastas e arquivos de dados se ainda não existirem (primeira execução / contêiner novo)
+    if (!prepararArmazenamento()) {
+        exit(EXIT_FAILURE);
+    }
     //atualiza o id do trecho
     encontrarID();
     //acerta o contador conforme os arquivos que existem
@@ -1709,9 +1764,6 @@ int main(){
     }
 
     //liga o servidor HTTP. A libmicrohttpd cuida de socket, bind, listen, accept e do parsing do HTTP.
-    //  INTERNAL_POLLING_THREAD: ela cria a thread que aceita conexões (o main fica livre)
-    //  THREAD_PER_CONNECTION:   cada conexão é atendida em uma thread própria (como no modelo anterior)
-    //  USE_POLL:                usa poll() em vez de select(), sem o limite de 1024 descritores
     struct MHD_Daemon *servidor = MHD_start_daemon(
         MHD_USE_INTERNAL_POLLING_THREAD | MHD_USE_THREAD_PER_CONNECTION | MHD_USE_POLL,
         porta,
