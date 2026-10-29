@@ -4,8 +4,8 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <microhttpd.h>
-#include "cJSON.h"
-#include "grafomapa.h"
+#include "../cJSON/cJSON.h"
+#include "../GrafoMapa/grafomapa.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>

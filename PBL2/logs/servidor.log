@@ -140,3 +140,9 @@
 [2026-10-04 18:10:05] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
 [2026-10-04 18:10:06] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
 [2026-10-04 18:10:09] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-10-29 13:07:18] [INFO] API REST entre servidores iniciada na porta 8080
+[2026-10-29 13:07:18] [INFO] Servidor iniciado na porta 65432
+[2026-10-29 13:09:10] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-10-29 13:09:10] [WARN] Falha de autenticação para o email: ana@gmail.com
+[2026-10-29 13:10:10] [INFO] Cliente logado - Nome: Ana | Email: ana@gmail.com
+[2026-10-29 13:10:39] [INFO] Dispositivo desconectado. Socket ID: 5

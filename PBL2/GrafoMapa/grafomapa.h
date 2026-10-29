@@ -2,7 +2,7 @@
 #define GRAFOMAPA_H
 #include <stdio.h>
 #include <stdbool.h>
-#include "cJSON.h"
+#include "../cJSON/cJSON.h"
 #include <pthread.h>
 
 #define MAX_CIDADES 100
