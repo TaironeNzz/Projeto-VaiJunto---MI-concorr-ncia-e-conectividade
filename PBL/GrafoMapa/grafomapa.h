@@ -1,7 +1,8 @@
 #ifndef GRAFOMAPA_H
 #define GRAFOMAPA_H
+#include <stdio.h>
 #include <stdbool.h>
-#include "cJSON.h"
+#include "../cJSON/cJSON.h"
 #include <pthread.h>
 
 #define MAX_CIDADES 100
@@ -45,6 +46,6 @@ Grafo* carregarGrafoDeArquivo(const char* nomeArquivo);
 int buscarIdPorNome(Grafo* g, const char* nome);
 bool existeCaminhoBFSPorNome(Grafo* g, const char* origem, const char* destino);
 // AGORA RETORNA cJSON* (Sem o socketCliente)
-cJSON* buscar_rotas_no_grafo(cJSON *jsonLogin, FILE *arquivoTrechos);
+cJSON* buscar_rotas_no_grafo(cJSON *jsonLogin);
 
 #endif

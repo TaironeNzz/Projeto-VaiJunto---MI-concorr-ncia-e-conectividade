@@ -1,0 +1,44 @@
+# Usar a imagem oficial do GCC para compilar código C
+FROM gcc:latest
+
+# Instalar a libmicrohttpd (usada pela API REST do servidor)
+RUN apt-get update && apt-get install -y --no-install-recommends libmicrohttpd-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Definir o diretório de trabalho dentro do container
+WORKDIR /app
+
+# Copiar as pastas de código e o mapa (contexto de build = raiz do projeto)
+COPY src/ ./src/
+COPY cJSON/ ./cJSON/
+COPY GrafoMapa/ ./GrafoMapa/
+COPY mapa.txt ./mapa.txt
+
+# Criar os diretórios que o servidor usa para gravar arquivos
+RUN mkdir -p logs trechosCadastrados dados ArquivoID Avisos Itinerarios
+
+# Compilar o servidor com as dependências (threads, libmicrohttpd e cJSON)
+RUN gcc -I cJSON -I GrafoMapa -I src \
+    src/servidor.c GrafoMapa/grafomapa.c cJSON/cJSON.c \
+    -o servidor_bin -lmicrohttpd -pthread -lm
+
+# Portas: 65432 = clientes/motoristas (TCP); 8080 = API REST entre servidores
+EXPOSE 65432
+EXPOSE 8080
+
+# Executar a partir da RAIZ do projeto:
+# docker build -t app-servidor -f DockerFile/DockerFile.Servidor .
+#
+# docker run -it \
+#   --name servidor \
+#   -p 65432:65432 -p 8080:8080 \
+#   -v "$(pwd)/dados:/app/dados" \
+#   -v "$(pwd)/trechosCadastrados:/app/trechosCadastrados" \
+#   -v "$(pwd)/ArquivoID:/app/ArquivoID" \
+#   -v "$(pwd)/Avisos:/app/Avisos" \
+#   -v "$(pwd)/Itinerarios:/app/Itinerarios" \
+#   -v "$(pwd)/logs:/app/logs" \
+#   app-servidor
+
+# Comando para iniciar o servidor
+CMD ["./servidor_bin"]

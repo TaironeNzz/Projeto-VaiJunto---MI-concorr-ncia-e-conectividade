@@ -5,8 +5,10 @@
 #include <strings.h>
 #include "grafomapa.h"
 
-extern pthread_mutex_t trechosMutex;
 extern Grafo *mapa;
+//fornecidos por servidor.c: cada trecho fica em um arquivo proprio, lido com o mutex do proprio trecho
+extern int lerLimiteIdTrechos(void);
+extern cJSON *lerTrecho(int id);
 
 bool existeCaminhoBFSPorNome(Grafo* g, const char* origem, const char* destino) {
     if (!g || !origem || !destino) return false;
@@ -148,7 +150,8 @@ static void dfsParaJSON(Grafo* mapaBase, Grafo* grafoCaronas, int atual, int des
 }
 
 // RETORNA O OBJETO cJSON PARA O SERVIDOR
-cJSON* buscar_rotas_no_grafo(cJSON *jsonLogin, FILE *arquivoTrechos) {
+// Le os trechos de trechosCadastrados/trecho<ID>.json (um mutex por trecho, travado dentro de lerTrecho)
+cJSON* buscar_rotas_no_grafo(cJSON *jsonLogin) {
     cJSON *arrayResposta = cJSON_CreateArray();
 
     char *origemBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origem"));
@@ -158,37 +161,33 @@ cJSON* buscar_rotas_no_grafo(cJSON *jsonLogin, FILE *arquivoTrechos) {
         return arrayResposta;
     }
 
-    pthread_mutex_lock(&trechosMutex);
-    if (arquivoTrechos == NULL) {
-        pthread_mutex_unlock(&trechosMutex);
+    Grafo *grafoCaronas = criarGrafo();
+    if (grafoCaronas == NULL) {
         return arrayResposta;
     }
-    rewind(arquivoTrechos);
 
-    Grafo *grafoCaronas = criarGrafo();
-    char linha[512];
+    int limite = lerLimiteIdTrechos();
+    for (int i = 0; i < limite; i++) {
+        cJSON *trechoJson = lerTrecho(i);
+        if (trechoJson == NULL) continue;
 
-    while (fgets(linha, sizeof(linha), arquivoTrechos) != NULL) {
-        cJSON *trechoJson = cJSON_Parse(linha);
-        if (trechoJson != NULL) {
-            cJSON *idObj = cJSON_GetObjectItem(trechoJson, "id");
-            char *motorista = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "nomeMotorista"));
-            char *origem = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "origem"));
-            char *destino = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "destino"));
-            int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechoJson, "capacidade"));
+        // o servidor grava o id do trecho no campo "idTrecho"
+        cJSON *idObj = cJSON_GetObjectItem(trechoJson, "idTrecho");
+        char *motorista = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "nomeMotorista"));
+        char *origem = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "origem"));
+        char *destino = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "destino"));
+        int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechoJson, "capacidade"));
 
-            if (capacidade > 0 && origem != NULL && destino != NULL && motorista != NULL && idObj != NULL) {
-                int idOrigem = buscarIdPorNome(mapa, origem);
-                int idDestino = buscarIdPorNome(mapa, destino);
+        if (capacidade > 0 && origem != NULL && destino != NULL && motorista != NULL && idObj != NULL) {
+            int idOrigem = buscarIdPorNome(mapa, origem);
+            int idDestino = buscarIdPorNome(mapa, destino);
 
-                if (idOrigem != -1 && idDestino != -1) {
-                    oferecerCarona(grafoCaronas, idObj->valueint, idOrigem, idDestino, motorista);
-                }
+            if (idOrigem != -1 && idDestino != -1) {
+                oferecerCarona(grafoCaronas, idObj->valueint, idOrigem, idDestino, motorista);
             }
-            cJSON_Delete(trechoJson);
         }
+        cJSON_Delete(trechoJson);
     }
-    pthread_mutex_unlock(&trechosMutex);
 
     int origId = buscarIdPorNome(mapa, origemBuscada);
     int destId = buscarIdPorNome(mapa, destinoBuscado);

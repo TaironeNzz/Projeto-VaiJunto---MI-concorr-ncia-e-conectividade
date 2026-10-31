@@ -2,13 +2,14 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <fcntl.h>
-#include "cJSON.h"
+#include "../cJSON/cJSON.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <netdb.h>
+#include <signal.h>
 #include "formatos.h"
 
 #define PORT 65432
@@ -38,7 +39,8 @@ void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int
 }
 
 //função para enviar uma requisição de cadastrar trecho
-void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
+//retorna 0 se o servidor estiver offline e 1 nos outros casos
+int cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     char buffer_mensagem[256] = {0};
     char origem[50], destino[50];
     char data[11], hora[6];
@@ -62,13 +64,18 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     cJSON *arrayClientes = cJSON_CreateArray();
     if (arrayClientes == NULL){
         printf("Array de clientes nao criado!\n");
-        return;
+        return 1;
+    }
+    cJSON *arrayNomesClientes = cJSON_CreateArray();
+    if (arrayNomesClientes == NULL){
+        printf("Array de nomes de clientes nao criado!\n");
+        return 1;
     }
 
     char *email = motorista->email;
     if (email == NULL){
         printf("email inválido!\n");
-        return;
+        return 1;
     }
     //monta o cjson para a requisição
     cJSON_AddStringToObject(trecho, "classe", "Motorista");
@@ -82,7 +89,7 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
     cJSON_AddNumberToObject(trecho, "preco", preco);
     cJSON_AddStringToObject(trecho, "nome", motorista->nome);
     cJSON_AddItemToObject(trecho, "clientes", arrayClientes);
-
+    cJSON_AddItemToObject(trecho, "nomesClientes", arrayNomesClientes);
     char *mensagem = cJSON_PrintUnformatted(trecho);
     //envia a requisição
     if (mensagem != NULL) {
@@ -99,7 +106,11 @@ void cadastrarTrecho(int socketMotorista, Motorista *motorista) {
         } else {
             printf("Falha ao cadastrar trecho, caminho possivel nao encontrado\n");
         }
+    } else {
+        printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+        return 0;
     }
+    return 1;
 }
 
 //função para cadastrar n trechos
@@ -110,14 +121,18 @@ void cadastrarTrechos(int socketMotorista, Motorista *motorista) {
 
     for (int i = 0; i < quantidade; i++) {
         printf("Cadastro do trecho %d:\n", i + 1);
-        cadastrarTrecho(socketMotorista, motorista);
+        if (!cadastrarTrecho(socketMotorista, motorista)) {
+            break; //servidor offline, não adianta tentar os próximos trechos
+        }
     }
 }
 
 //função para fazer uma requisição para listar os trechos do motorista
-void listarTrechos(int socketMotorista, Motorista *motorista){
+//retorna a quantidade de trechos listados, ou -1 se o servidor estiver offline/houver erro
+int listarTrechos(int socketMotorista, Motorista *motorista){
     char buffer_mensagem[4096] = {0};
     int total = 0;
+    int servidorOffline = 0;
 
     cJSON *enviar_dados = cJSON_CreateObject();
     cJSON_AddStringToObject(enviar_dados, "classe", "Motorista");
@@ -133,27 +148,38 @@ void listarTrechos(int socketMotorista, Motorista *motorista){
     }
     cJSON_Delete(enviar_dados);
 
-    printf("====================================\n");
-    printf("          Meus Trechos              \n");
-
     cJSON *arrayResposta = NULL;
     while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
         ssize_t bytes = read(socketMotorista, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
-        if (bytes <= 0) break;
+        if (bytes <= 0) {
+            servidorOffline = 1;
+            break;
+        }
         total += bytes;
         buffer_mensagem[total] = '\0';
         arrayResposta = cJSON_Parse(buffer_mensagem);
     }
 
+    if (servidorOffline) {
+        printf("O SERVIDOR ESTA OFFLINE\n");
+        cJSON_Delete(arrayResposta);
+        return -1;
+    }
+
     if (arrayResposta == NULL) {
         printf("Erro ao obter lista de trechos.\n");
-        return;
+        return -1;
     }
 
     int n = cJSON_GetArraySize(arrayResposta);
     if (n == 0) {
         printf("Nenhum trecho cadastrado\n");
+        cJSON_Delete(arrayResposta);
+        return 0;
     }
+    printf("====================================\n");
+    printf("          Meus Trechos              \n");
+
     for (int i = 0; i < n; i++) {
         cJSON *item = cJSON_GetArrayItem(arrayResposta, i);
         int id = cJSON_GetNumberValue(cJSON_GetObjectItem(item, "id"));
@@ -169,14 +195,32 @@ void listarTrechos(int socketMotorista, Motorista *motorista){
         printf("Data: %s\n", data);
         printf("Hora: %s\n", hora);
         printf("Capacidade: %d\n", capacidade);
+        printf("Passageiros: ");
+        cJSON *arrayNomesClientes = cJSON_GetObjectItem(item, "nomesClientes");
+        int numClientes = cJSON_GetArraySize(arrayNomesClientes);
+        if (numClientes == 0){
+            printf("Nenhum passageiro cadastrado\n");
+        } else {
+            for (int j = 0; j < numClientes; j++) {
+                printf("%s", cJSON_GetStringValue(cJSON_GetArrayItem(arrayNomesClientes, j)));
+                if (j < numClientes - 1) {
+                    printf(", ");
+                }
+            }
+            printf("\n");
+        }
+
     }
     printf("====================================\n");
     cJSON_Delete(arrayResposta);
+    return n;
 }
 
 //função para a requisição de cancelar um trecho do motorista
 void cancelarTrecho(int socketMotorista, Motorista *motorista){
-    listarTrechos(socketMotorista, motorista);
+    if (listarTrechos(socketMotorista, motorista) <= 0) {
+        return; //servidor offline, erro ou nenhum trecho para cancelar
+    }
 
     printf("Digite o ID do trecho que deseja cancelar (ou -1 para voltar): ");
     int idSelecionado;
@@ -210,6 +254,8 @@ void cancelarTrecho(int socketMotorista, Motorista *motorista){
         } else {
             printf("Trecho nao encontrado.\n");
         }
+    } else {
+        printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
     }
 }
 
@@ -305,7 +351,7 @@ void cadastrarRotaMotorista(int socketMotorista, Motorista *motorista){
     int bytes = read(socketMotorista, buffer_mensagem, sizeof(buffer_mensagem) - 1);
 
     if (bytes <= 0) {
-        printf("Erro: Conexao com o servidor perdida.\n");
+        printf("ERRO: SERVIDOR OFFLINE\n");
         return;
     }
 
@@ -411,6 +457,11 @@ void telaLogin(int socketMotorista, Motorista *motorista){
             telaLogin(socketMotorista, motorista);
             return;
         }
+        if (strcmp(buffer_mensagem, "DADOS_INVALIDOS") == 0) {
+            printf("Preencha todos os campos! Tente novamente.\n");
+            telaLogin(socketMotorista, motorista);
+            return;
+        }
         cJSON *respostaJSON = cJSON_Parse(buffer_mensagem);
         if (respostaJSON != NULL){
             char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(respostaJSON, "nome"));
@@ -423,6 +474,8 @@ void telaLogin(int socketMotorista, Motorista *motorista){
             }
             cJSON_Delete(respostaJSON);
         }
+    } else {
+        printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
     }
 }
 
@@ -477,9 +530,14 @@ void telaCadastro(int socketMotorista, Motorista *motorista){
         } else if (strcmp(buffer_mensagem, "CADASTRO_REALIZADO") == 0) {
             printf("Cadastro realizado com sucesso!\n");
             motorista->status = AUTENTICADO;
+        } else if (strcmp(buffer_mensagem, "DADOS_INVALIDOS") == 0) {
+            printf("Preencha todos os campos! Tente novamente.\n");
+            telaCadastro(socketMotorista, motorista);
         } else {
             printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
         }
+    } else {
+        printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
     }
 }
 
@@ -518,6 +576,8 @@ void telaInicial(int socketMotorista, Motorista *motorista){
 }
 
 int main(){
+    //signal para o programa não encerrar caso o servidor feche a conexão
+    signal(SIGPIPE, SIG_IGN);
     int socketMotorista;
     struct sockaddr_in endereco_servidor;
     char buffer_mensagem[81] = {0};
@@ -564,6 +624,8 @@ int main(){
     if (bytes > 0) {
         buffer_mensagem[bytes] = '\0';
         printf("Mensagem do servidor: %s\n", buffer_mensagem);
+    } else {
+        printf("O SERVIDOR ESTA OFFLINE\n");
     }
     
     free(motorista);
