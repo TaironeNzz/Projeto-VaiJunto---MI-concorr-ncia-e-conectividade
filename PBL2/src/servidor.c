@@ -2171,7 +2171,7 @@ int main(){
     //pasta dos itinerários; desfaz os que ficaram PENDENTES se o servidor tiver caído antes
     mkdir(DIR_ITINERARIOS, 0755);
     recuperarItinerarios();
-    mapa = carregarGrafoDeArquivo("mapa.txt");
+    mapa = carregarGrafoDeArquivo("GrafoMapa/mapa.txt");
 
     if (mapa == NULL){
         log_mensagem(LOG_ERROR, "Falha ao criar o grafo de mapa: %m");

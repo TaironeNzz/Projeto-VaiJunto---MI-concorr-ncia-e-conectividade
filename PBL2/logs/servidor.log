@@ -146,3 +146,43 @@
 [2026-10-29 13:09:10] [WARN] Falha de autenticação para o email: ana@gmail.com
 [2026-10-29 13:10:10] [INFO] Cliente logado - Nome: Ana | Email: ana@gmail.com
 [2026-10-29 13:10:39] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-10-31 14:04:07] [ERROR] Falha ao criar o grafo de mapa: No such file or directory
+[2026-10-31 14:05:09] [INFO] API REST entre servidores iniciada na porta 8080
+[2026-10-31 14:05:09] [INFO] Servidor iniciado na porta 65432
+[2026-10-31 14:05:44] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-10-31 14:05:44] [WARN] Falha de autenticação para o email: marcelo@gmail.com
+[2026-10-31 14:05:49] [INFO] Motorista logado - Nome: Marcelo | Email: marcelo@gmail.com
+[2026-10-31 14:05:59] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-31 14:06:04] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-31 14:06:29] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-10-31 14:06:37] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-10-31 14:06:37] [WARN] Falha de autenticação para o email: marcelo@gmail.com
+[2026-10-31 14:06:51] [INFO] Cliente logado - Nome: Ana | Email: ana@gmail.com
+[2026-10-31 14:06:55] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-31 14:07:13] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-31 14:07:24] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-31 14:07:38] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-31 14:07:39] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-31 14:07:51] [INFO] Consulta de reservas solicitada - Cliente: ana@gmail.com
+[2026-10-31 14:09:12] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-10-31 14:09:27] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-10-31 14:09:27] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-10-31 14:11:33] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-10-31 14:11:39] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-10-31 14:15:13] [INFO] API REST entre servidores iniciada na porta 8080
+[2026-10-31 14:15:13] [INFO] Servidor iniciado na porta 65432
+[2026-10-31 14:15:49] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-10-31 14:15:49] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-10-31 14:16:39] [INFO] Trecho ID 10 cadastrado por Lucio (Santa_Barbara -> Feira_de_Santana)
+[2026-10-31 14:16:44] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-10-31 14:16:57] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-10-31 14:16:59] [INFO] Dispositivo desconectado. Socket ID: 6
+[2026-10-31 14:17:07] [INFO] Novo dispositivo conectado. Socket ID: 5
+[2026-10-31 14:17:07] [INFO] Motorista logado - Nome: Lucio | Email: lucio@gmail.com
+[2026-10-31 14:17:12] [INFO] Busca de trechos feito pelo motorista: lucio@gmail.com
+[2026-10-31 14:17:14] [INFO] Dispositivo desconectado. Socket ID: 5
+[2026-10-31 14:17:23] [INFO] Novo dispositivo conectado. Socket ID: 6
+[2026-10-31 14:17:23] [INFO] Motorista logado - Nome: Marcelo | Email: marcelo@gmail.com
+[2026-10-31 14:17:25] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
+[2026-10-31 14:17:47] [INFO] Trecho ID 11 cadastrado por Marcelo (Feira_de_Santana -> Salvador)
+[2026-10-31 14:17:52] [INFO] Busca de trechos feito pelo motorista: marcelo@gmail.com
