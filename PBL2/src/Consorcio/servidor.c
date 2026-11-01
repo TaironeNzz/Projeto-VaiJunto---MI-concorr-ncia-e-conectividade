@@ -4,8 +4,8 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <microhttpd.h>
-#include "../cJSON/cJSON.h"
-#include "../GrafoMapa/grafomapa.h"
+#include "cJSON.h"
+#include "grafomapa.h"
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -15,7 +15,11 @@
 #include <stdarg.h>
 #include <sys/stat.h>
 #include <dirent.h>
-#define PORT 65432
+#include <signal.h>
+#include "servidor.h"
+#include "consorcio.h"
+#include "lamport.h"
+#define PORT_PADRAO 65432
 
 //grafo do mapa para verificação de caminhos
 Grafo *mapa;
@@ -76,12 +80,6 @@ void destruirGerenciadorDeTravas() {
     pthread_mutex_destroy(&gerencialTrechosMutex);
 }
 
-// Níveis de log disponíveis
-typedef enum {
-    LOG_INFO,
-    LOG_WARN,
-    LOG_ERROR
-} LogLevel;
 
 // Mutex exclusivo para sincronizar a escrita de logs
 pthread_mutex_t logMutex = PTHREAD_MUTEX_INITIALIZER;
@@ -249,7 +247,7 @@ cJSON *lerTrecho(int id) {
 
 //grava o trecho no arquivo (deve chamar com a trava)
 //Escreve num .tmp e usa rename, assim o arquivo nunca fica pela metade. Retorna 1 em sucesso e 0 em erro
-static int gravarTrechoNoLock(int id, cJSON *trecho) {
+int gravarTrechoNoLock(int id, cJSON *trecho) {
     char destino[128];
     char temporario[128];
     caminhoTrecho(id, destino, sizeof(destino));
@@ -265,6 +263,10 @@ static int gravarTrechoNoLock(int id, cJSON *trecho) {
         return 0;
     }
     int ok = (fprintf(arquivo, "%s\n", saida) >= 0);
+    //durabilidade: o conteúdo precisa estar em disco ANTES do rename (e antes de a decisão do 2PC ser dada como aplicada),
+    //senão uma queda do sistema operacional/energia poderia deixar o trecho defasado em relação ao log de transações
+    ok = (fflush(arquivo) == 0) && ok;
+    ok = (fsync(fileno(arquivo)) == 0) && ok;
     ok = (fclose(arquivo) == 0) && ok;
     free(saida);
 
@@ -486,6 +488,7 @@ int cadastrarTrecho(cJSON *jsonLogin, int socketMotorista){
         cJSON_AddStringToObject(trecho, "data", data);
         cJSON_AddStringToObject(trecho, "hora", hora);
         cJSON_AddNumberToObject(trecho, "capacidade", capacidade);
+        cJSON_AddNumberToObject(trecho, "capacidadeTotal", capacidade);
         cJSON_AddNumberToObject(trecho, "preco", preco);
         cJSON_AddItemToObject(trecho, "clientes", arrayClientes != NULL ? cJSON_Duplicate(arrayClientes, 1) : cJSON_CreateArray());
         cJSON_AddItemToObject(trecho, "nomesClientes", arrayNomesClientes != NULL ? cJSON_Duplicate(arrayNomesClientes, 1) : cJSON_CreateArray());
@@ -940,6 +943,7 @@ void cadastrarRota(cJSON *jsonLogin, int socketMotorista){
         cJSON_AddStringToObject(trechoSalvar, "data", data);
         cJSON_AddStringToObject(trechoSalvar, "hora", hora);
         cJSON_AddNumberToObject(trechoSalvar, "capacidade", capacidade);
+        cJSON_AddNumberToObject(trechoSalvar, "capacidadeTotal", capacidade);
         cJSON_AddNumberToObject(trechoSalvar, "preco", preco);
 
         cJSON *arrayClientesVazio = cJSON_CreateArray();
@@ -1065,47 +1069,40 @@ void loginCliente(cJSON *jsonLogin, int socketCliente, FILE *arquivoLogin){
     pthread_mutex_unlock(&loginClienteMutex);
 }
 
-//função para buscar as caronas que o usuário pediu
+//função para buscar as caronas que o usuário pediu (origem -> destino direto, em TODAS as empresas do consórcio)
+//Os itens trazem "id" (o que deve ser devolvido em confirmar_itinerario) e "empresaId".
 void buscar_carona(cJSON *jsonLogin, int socketCliente){
-    cJSON *arrayResposta = cJSON_CreateArray();
     char *origemBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origem"));
     char *destinoBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "destino"));
     char *dataBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "data"));
 
-    int limite = lerLimiteIdTrechos();
-    for (int i = 0; i < limite; i++) {
-        cJSON *trechosJson = lerTrecho(i);
-        if (trechosJson == NULL) continue;
-
-        int id = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "idTrecho"));
-        char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "nomeMotorista"));
-        char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "origem"));
-        char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "destino"));
-        int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "capacidade"));
-        char *data = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "data"));
-        char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "hora"));
-        float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "preco"));
-
-        if (cidadeOrigem != NULL && cidadeDestino != NULL && origemBuscada != NULL && destinoBuscado != NULL
-            && dataBuscada != NULL && data != NULL && (strcmp(dataBuscada, data) == 0 || strcmp(dataBuscada, "dd/mm/aaaa") == 0) &&
-            strcmp(cidadeOrigem, origemBuscada) == 0 && strcmp(cidadeDestino, destinoBuscado) == 0) {
-            cJSON *item = cJSON_CreateObject();
-            cJSON_AddNumberToObject(item, "id", id);
-            cJSON_AddStringToObject(item, "nomeMotorista", nomeMotorista);
-            cJSON_AddStringToObject(item, "origem", cidadeOrigem);
-            cJSON_AddStringToObject(item, "destino", cidadeDestino);
-            cJSON_AddNumberToObject(item, "capacidade", capacidade);
-            cJSON_AddStringToObject(item, "data", data);
-            cJSON_AddStringToObject(item, "hora", hora);
-            cJSON_AddNumberToObject(item, "preco", preco);
-            cJSON_AddItemToArray(arrayResposta, item);
+    cJSON *todos = listarTrechosConsorcio(dataBuscada);
+    cJSON *arrayResposta = cJSON_CreateArray();
+    cJSON *item;
+    cJSON_ArrayForEach(item, todos) {
+        char *o = cJSON_GetStringValue(cJSON_GetObjectItem(item, "origem"));
+        char *d = cJSON_GetStringValue(cJSON_GetObjectItem(item, "destino"));
+        if (origemBuscada != NULL && destinoBuscado != NULL && o != NULL && d != NULL &&
+            strcmp(o, origemBuscada) == 0 && strcmp(d, destinoBuscado) == 0) {
+            cJSON_AddItemToArray(arrayResposta, cJSON_Duplicate(item, 1));
         }
-        cJSON_Delete(trechosJson);
     }
+    cJSON_Delete(todos);
     char *resposta = cJSON_PrintUnformatted(arrayResposta);
-    send(socketCliente, resposta, strlen(resposta), 0);
+    enviarTudo(socketCliente, resposta, strlen(resposta));
     free(resposta);
     cJSON_Delete(arrayResposta);
+}
+
+//busca itinerários completos (cadeias de trechos, de qualquer empresa) entre origem e destino
+//Requisição: {"classe":"Cliente","acao":"buscar_rotas","origem":"A","destino":"C","data":"dd/mm/aaaa"(opcional)}
+//Resposta: [{"trechos":[{id,empresaId,origem,destino,nomeMotorista,data,hora,preco}, ...]}, ...]
+void buscar_rotas_cliente(cJSON *jsonLogin, int socketCliente){
+    cJSON *rotas = buscar_rotas_no_grafo(jsonLogin);
+    char *resposta = cJSON_PrintUnformatted(rotas);
+    enviarTudo(socketCliente, resposta, strlen(resposta));
+    free(resposta);
+    cJSON_Delete(rotas);
 }
 
 //resultados possíveis da tentativa de reservar um assento
@@ -1248,53 +1245,34 @@ int cancelarReservaInterna(int idSelecionado, char *emailCliente, char *nomeClie
     return clienteEncontrado;
 }
 
-/* ================= ITINERÁRIOS ATÔMICOS =================
- * O cliente envia o itinerário completo (lista de trechos, possivelmente de motoristas diferentes)
- * numa única requisição "confirmar_itinerario". O servidor:
- *   1. valida o itinerário e grava Itinerarios/itinerario<ID>.json com status PENDENTE (registro da transação);
- *   2. trava os mutexes de TODOS os trechos, sempre em ordem crescente da posição do mutex (evita deadlock);
- *   3. com tudo travado, verifica todos os trechos; se algum falhar, nada foi alterado -> status RECUSADO;
- *   4. se todos passarem, aplica a reserva em todos; se uma gravação falhar no meio, desfaz as já aplicadas;
- *   5. grava o status CONFIRMADO no arquivo do itinerário ainda com as travas, e só então destrava e responde.
- * Se o servidor cair entre 1 e 5, o arquivo continua PENDENTE e recuperarItinerarios() desfaz a reserva na próxima inicialização.
- *
- * Requisição:
+/* ================= ITINERÁRIOS =================
+ * O cliente envia o itinerário completo numa única requisição "confirmar_itinerario":
  *   {"classe":"Cliente","acao":"confirmar_itinerario","emailCliente":"a@b.com","nomeCliente":"Ana",
  *    "origemRota":"A","destinoRota":"C",
- *    "rota":[{"idTrecho":3,"origem":"A","destino":"B"},{"idTrecho":8,"origem":"B","destino":"C"}]}
- * Respostas: {"status":"ITINERARIO_CONFIRMADO","idItinerario":N} | ITINERARIO_INVALIDO | TRECHO_NAO_ENCONTRADO |
- *            ASSENTO_INDISPONIVEL | RESERVA_DUPLICADA | FALHA_ITINERARIO
+ *    "rota":[{"idTrecho":3,"origem":"A","destino":"B"},{"idTrecho":2000008,"origem":"B","destino":"C"}]}
+ * Os ids >= 1000000 pertencem a outras empresas (id = empresa*1000000 + idLocal), como devolvidos por "buscar_rotas".
+ * A decisão é tomada por Two-Phase Commit entre os servidores (consorcio.c); o arquivo Itinerarios/itinerario<ID>.json
+ * só é criado depois que a decisão COMMIT foi gravada no log do coordenador.
  */
 #define DIR_ITINERARIOS         "Itinerarios"
 #define MAX_TRECHOS_ITINERARIO  16
-
-#define ITIN_OK              1
-#define ITIN_INVALIDO        0
-#define ITIN_NAO_ENCONTRADO -1
-#define ITIN_SEM_ASSENTO    -2
-#define ITIN_DUPLICADO      -3
-#define ITIN_ERRO           -4
 
 //próximo id de itinerário (definido na inicialização por recuperarItinerarios, protegido por itinerarioIdMutex)
 static int idItinerario = 0;
 static pthread_mutex_t itinerarioIdMutex = PTHREAD_MUTEX_INITIALIZER;
 
-typedef struct {
-    int idTrecho;
-    int posicao; //posição do mutex do trecho em travasTrechos (id % MAX_TRECHOS)
-} OrdemTrava;
-
-static int compararOrdemTrava(const void *a, const void *b) {
-    const OrdemTrava *x = a, *y = b;
-    if (x->posicao != y->posicao) return x->posicao < y->posicao ? -1 : 1;
-    return (x->idTrecho > y->idTrecho) - (x->idTrecho < y->idTrecho);
-}
-
-static int proximoIdItinerario(void) {
+int proximoIdItinerario(void) {
     pthread_mutex_lock(&itinerarioIdMutex);
     int id = idItinerario++;
     pthread_mutex_unlock(&itinerarioIdMutex);
     return id;
+}
+
+//garante que o próximo id de itinerário seja >= id (usado na recuperação do coordenador)
+void garantirIdItinerarioMinimo(int id) {
+    pthread_mutex_lock(&itinerarioIdMutex);
+    if (id > idItinerario) idItinerario = id;
+    pthread_mutex_unlock(&itinerarioIdMutex);
 }
 
 static void caminhoItinerario(int id, char *destino, size_t tamanho) {
@@ -1302,7 +1280,7 @@ static void caminhoItinerario(int id, char *destino, size_t tamanho) {
 }
 
 //grava o itinerário em arquivo (.tmp + fsync + rename, o arquivo nunca fica pela metade). Retorna 1 em sucesso
-static int gravarItinerario(int id, cJSON *itinerario) {
+int gravarItinerario(int id, cJSON *itinerario) {
     char destino[128], temporario[128];
     caminhoItinerario(id, destino, sizeof(destino));
     snprintf(temporario, sizeof(temporario), "%s/itinerario%d.tmp", DIR_ITINERARIOS, id);
@@ -1335,224 +1313,42 @@ static void trocarStatusItinerario(cJSON *itinerario, const char *status, const 
     }
 }
 
-static int emailNoArray(cJSON *array, const char *email) {
-    int total = array ? cJSON_GetArraySize(array) : 0;
-    for (int i = 0; i < total; i++) {
-        char *e = cJSON_GetStringValue(cJSON_GetArrayItem(array, i));
-        if (e != NULL && strcmp(e, email) == 0) return 1;
-    }
-    return 0;
+//usado pelo coordenador (consorcio.c) quando um COMMIT precisou ser compensado: marca o itinerário como CANCELADO
+void cancelarItinerarioCompensado(int id, const char *motivo) {
+    if (id < 0) return;
+    char caminho[128];
+    caminhoItinerario(id, caminho, sizeof(caminho));
+    FILE *f = fopen(caminho, "r");
+    if (!f) return;
+    fseek(f, 0, SEEK_END);
+    long n = ftell(f);
+    rewind(f);
+    char *buf = (n > 0) ? malloc(n + 1) : NULL;
+    if (!buf) { fclose(f); return; }
+    size_t lidos = fread(buf, 1, n, f);
+    buf[lidos] = '\0';
+    fclose(f);
+    cJSON *it = cJSON_Parse(buf);
+    free(buf);
+    if (!it) return;
+    trocarStatusItinerario(it, "CANCELADO", motivo);
+    gravarItinerario(id, it);
+    cJSON_Delete(it);
 }
 
-static void copiarStringJson(cJSON *destino, cJSON *origem, const char *chave) {
-    char *valor = cJSON_GetStringValue(cJSON_GetObjectItem(origem, chave));
-    if (valor != NULL) cJSON_AddStringToObject(destino, chave, valor);
-}
-
-//Reserva todos os trechos do itinerário ou nenhum. Devolve um dos códigos ITIN_*
-static int confirmarItinerarioAtomico(cJSON *jsonLogin, int *idItinerarioSaida) {
-    if (idItinerarioSaida != NULL) *idItinerarioSaida = -1;
-
-    char *emailCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailCliente"));
-    if (emailCliente == NULL) emailCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
-    char *nomeCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nomeCliente"));
-    char *origemRota = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origemRota"));
-    char *destinoRota = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "destinoRota"));
-    cJSON *rota = cJSON_GetObjectItem(jsonLogin, "rota");
-
-    if (emailCliente == NULL || nomeCliente == NULL || origemRota == NULL || destinoRota == NULL ||
-        rota == NULL || !cJSON_IsArray(rota)) {
-        return ITIN_INVALIDO;
-    }
-    int n = cJSON_GetArraySize(rota);
-    if (n < 1 || n > MAX_TRECHOS_ITINERARIO) return ITIN_INVALIDO;
-
-    //1. validação do formato: cadeia contínua origemRota -> ... -> destinoRota, sem trecho repetido
-    int ids[MAX_TRECHOS_ITINERARIO];
-    const char *origens[MAX_TRECHOS_ITINERARIO];
-    const char *destinos[MAX_TRECHOS_ITINERARIO];
-    for (int i = 0; i < n; i++) {
-        cJSON *item = cJSON_GetArrayItem(rota, i);
-        cJSON *idJson = cJSON_GetObjectItem(item, "idTrecho");
-        if (idJson == NULL) idJson = cJSON_GetObjectItem(item, "id");
-        origens[i] = cJSON_GetStringValue(cJSON_GetObjectItem(item, "origem"));
-        destinos[i] = cJSON_GetStringValue(cJSON_GetObjectItem(item, "destino"));
-        if (!cJSON_IsNumber(idJson) || idJson->valuedouble < 0 || origens[i] == NULL || destinos[i] == NULL) {
-            return ITIN_INVALIDO;
-        }
-        ids[i] = (int)idJson->valuedouble;
-        for (int j = 0; j < i; j++) {
-            if (ids[j] == ids[i]) return ITIN_INVALIDO;
-        }
-        if (i == 0 && strcmp(origens[i], origemRota) != 0) return ITIN_INVALIDO;
-        if (i > 0 && strcmp(origens[i], destinos[i - 1]) != 0) return ITIN_INVALIDO;
-        if (i == n - 1 && strcmp(destinos[i], destinoRota) != 0) return ITIN_INVALIDO;
-    }
-
-    //2. grava o itinerário como PENDENTE (registro da transação, antes de mexer em qualquer trecho)
-    int meuId = proximoIdItinerario();
-    if (idItinerarioSaida != NULL) *idItinerarioSaida = meuId;
-
-    char horario[20];
-    time_t agora = time(NULL);
-    struct tm tmAgora;
-    localtime_r(&agora, &tmAgora);
-    strftime(horario, sizeof(horario), "%Y-%m-%d %H:%M:%S", &tmAgora);
-
-    cJSON *itinerario = cJSON_CreateObject();
-    cJSON_AddNumberToObject(itinerario, "idItinerario", meuId);
-    cJSON_AddStringToObject(itinerario, "emailCliente", emailCliente);
-    cJSON_AddStringToObject(itinerario, "nomeCliente", nomeCliente);
-    cJSON_AddStringToObject(itinerario, "origem", origemRota);
-    cJSON_AddStringToObject(itinerario, "destino", destinoRota);
-    cJSON_AddStringToObject(itinerario, "status", "PENDENTE");
-    cJSON_AddStringToObject(itinerario, "criadoEm", horario);
-    cJSON *listaTrechos = cJSON_AddArrayToObject(itinerario, "trechos");
-    for (int i = 0; i < n; i++) {
-        cJSON *t = cJSON_CreateObject();
-        cJSON_AddNumberToObject(t, "idTrecho", ids[i]);
-        cJSON_AddStringToObject(t, "origem", origens[i]);
-        cJSON_AddStringToObject(t, "destino", destinos[i]);
-        cJSON_AddItemToArray(listaTrechos, t);
-    }
-    if (!gravarItinerario(meuId, itinerario)) {
-        log_mensagem(LOG_ERROR, "Falha ao gravar o arquivo do itinerario %d", meuId);
-        cJSON_Delete(itinerario);
-        return ITIN_ERRO;
-    }
-
-    //3. trava todos os trechos em ordem crescente da posição do mutex.
-    //Todas as threads travam na mesma ordem global, então não há deadlock entre itinerários que dividem trechos.
-    //Ids diferentes podem cair no mesmo mutex (id % MAX_TRECHOS): ordenar por posição deixa esses casos adjacentes e travamos uma vez só.
-    OrdemTrava ordem[MAX_TRECHOS_ITINERARIO];
-    for (int i = 0; i < n; i++) {
-        ordem[i].idTrecho = ids[i];
-        ordem[i].posicao = ids[i] % MAX_TRECHOS;
-    }
-    qsort(ordem, n, sizeof(OrdemTrava), compararOrdemTrava);
-
-    pthread_mutex_t *travas[MAX_TRECHOS_ITINERARIO];
-    int totalTravas = 0;
-    int posicaoAnterior = -1;
-    for (int i = 0; i < n; i++) {
-        if (ordem[i].posicao == posicaoAnterior) continue;
-        posicaoAnterior = ordem[i].posicao;
-        pthread_mutex_t *m = obterMutexTrecho(ordem[i].idTrecho);
-        pthread_mutex_lock(m);
-        travas[totalTravas++] = m;
-    }
-
-    cJSON *trechos[MAX_TRECHOS_ITINERARIO] = {0};
-    cJSON *originais[MAX_TRECHOS_ITINERARIO] = {0}; //cópia do estado anterior, usada para desfazer
-    int resultado = ITIN_OK;
-    const char *motivo = "";
-
-    //4. verificação: nada é alterado até que TODOS os trechos estejam aprovados
-    for (int i = 0; i < n; i++) {
-        trechos[i] = lerTrechoNoLock(ids[i]);
-        if (trechos[i] == NULL) {
-            resultado = ITIN_NAO_ENCONTRADO;
-            motivo = "trecho inexistente, cancelado ou expirado";
-            break;
-        }
-        char *o = cJSON_GetStringValue(cJSON_GetObjectItem(trechos[i], "origem"));
-        char *d = cJSON_GetStringValue(cJSON_GetObjectItem(trechos[i], "destino"));
-        if (o == NULL || d == NULL || strcmp(o, origens[i]) != 0 || strcmp(d, destinos[i]) != 0) {
-            resultado = ITIN_NAO_ENCONTRADO;
-            motivo = "origem/destino do trecho diferem do informado";
-            break;
-        }
-        if ((int)cJSON_GetNumberValue(cJSON_GetObjectItem(trechos[i], "capacidade")) <= 0) {
-            resultado = ITIN_SEM_ASSENTO;
-            motivo = "trecho sem assento disponivel";
-            break;
-        }
-        if (emailNoArray(cJSON_GetObjectItem(trechos[i], "clientes"), emailCliente)) {
-            resultado = ITIN_DUPLICADO;
-            motivo = "cliente ja possui reserva em um dos trechos";
-            break;
-        }
-        originais[i] = cJSON_Duplicate(trechos[i], 1);
-    }
-
-    //5. efetivação: aplica em todos os trechos; se uma gravação falhar, desfaz as já aplicadas
-    if (resultado == ITIN_OK) {
-        int aplicados = 0;
-        for (int i = 0; i < n; i++) {
-            int cap = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(trechos[i], "capacidade"));
-            cJSON_ReplaceItemInObject(trechos[i], "capacidade", cJSON_CreateNumber(cap - 1));
-            cJSON *clientes = cJSON_GetObjectItem(trechos[i], "clientes");
-            cJSON *nomes = cJSON_GetObjectItem(trechos[i], "nomesClientes");
-            if (clientes == NULL) clientes = cJSON_AddArrayToObject(trechos[i], "clientes");
-            if (nomes == NULL) nomes = cJSON_AddArrayToObject(trechos[i], "nomesClientes");
-            cJSON_AddItemToArray(clientes, cJSON_CreateString(emailCliente));
-            cJSON_AddItemToArray(nomes, cJSON_CreateString(nomeCliente));
-
-            if (!gravarTrechoNoLock(ids[i], trechos[i])) {
-                resultado = ITIN_ERRO;
-                motivo = "falha ao gravar a reserva em um dos trechos";
-                break;
-            }
-            aplicados++;
-        }
-
-        if (resultado == ITIN_OK) {
-            //completa o arquivo do itinerário com os dados dos trechos e marca como CONFIRMADO
-            for (int i = 0; i < n; i++) {
-                cJSON *t = cJSON_GetArrayItem(listaTrechos, i);
-                copiarStringJson(t, trechos[i], "nomeMotorista");
-                copiarStringJson(t, trechos[i], "emailMotorista");
-                copiarStringJson(t, trechos[i], "data");
-                copiarStringJson(t, trechos[i], "hora");
-                cJSON_AddNumberToObject(t, "preco", cJSON_GetNumberValue(cJSON_GetObjectItem(trechos[i], "preco")));
-            }
-            trocarStatusItinerario(itinerario, "CONFIRMADO", NULL);
-            //se a decisão não puder ser registrada em disco, o itinerário não é confirmado
-            if (!gravarItinerario(meuId, itinerario)) {
-                resultado = ITIN_ERRO;
-                motivo = "falha ao registrar a confirmacao do itinerario";
-            }
-        }
-
-        if (resultado != ITIN_OK) {
-            for (int j = 0; j < aplicados; j++) {
-                if (!gravarTrechoNoLock(ids[j], originais[j])) {
-                    log_mensagem(LOG_ERROR, "Itinerario %d: falha ao desfazer a reserva no trecho ID %d", meuId, ids[j]);
-                }
-            }
-        }
-    }
-
-    //destrava na ordem inversa
-    for (int k = totalTravas - 1; k >= 0; k--) {
-        pthread_mutex_unlock(travas[k]);
-    }
-
-    if (resultado == ITIN_OK) {
-        log_mensagem(LOG_INFO, "Itinerario %d confirmado - Cliente: %s | %s -> %s | %d trecho(s)",
-                     meuId, emailCliente, origemRota, destinoRota, n);
-    } else {
-        trocarStatusItinerario(itinerario, "RECUSADO", motivo);
-        gravarItinerario(meuId, itinerario);
-        log_mensagem(LOG_WARN, "Itinerario %d recusado - Cliente: %s | motivo: %s", meuId, emailCliente, motivo);
-    }
-
-    for (int i = 0; i < n; i++) {
-        cJSON_Delete(trechos[i]);
-        cJSON_Delete(originais[i]);
-    }
-    cJSON_Delete(itinerario);
-    return resultado;
-}
-
-//função chamada pelo tratarCliente para a ação "confirmar_itinerario"
+//função chamada pelo tratarCliente para a ação "confirmar_itinerario".
+//A confirmação passa pelo 2PC do consórcio (consorcio.c): atômica mesmo com trechos de várias empresas.
+//Resposta de sucesso: {"status":"ITINERARIO_CONFIRMADO","idItinerario":N,"idTransacao":"E1-..."}
+//Erros (texto puro): ITINERARIO_INVALIDO | TRECHO_NAO_ENCONTRADO | ASSENTO_INDISPONIVEL | RESERVA_DUPLICADA |
+//                    EMPRESA_INDISPONIVEL | FALHA_ITINERARIO
 void confirmar_itinerario(cJSON *jsonLogin, int socketCliente) {
     int idItin = -1;
-    int resultado = confirmarItinerarioAtomico(jsonLogin, &idItin);
+    char idTx[80] = {0};
+    int resultado = consorcioConfirmarItinerario(jsonLogin, &idItin, idTx, sizeof(idTx));
 
     if (resultado == ITIN_OK) {
-        char resposta[96];
-        snprintf(resposta, sizeof(resposta), "{\"status\":\"ITINERARIO_CONFIRMADO\",\"idItinerario\":%d}", idItin);
+        char resposta[256];
+        snprintf(resposta, sizeof(resposta), "{\"status\":\"ITINERARIO_CONFIRMADO\",\"idItinerario\":%d,\"idTransacao\":\"%s\"}", idItin, idTx);
         enviarTudo(socketCliente, resposta, strlen(resposta));
     } else if (resultado == ITIN_INVALIDO) {
         send(socketCliente, "ITINERARIO_INVALIDO", 19, 0);
@@ -1562,6 +1358,8 @@ void confirmar_itinerario(cJSON *jsonLogin, int socketCliente) {
         send(socketCliente, "ASSENTO_INDISPONIVEL", 20, 0);
     } else if (resultado == ITIN_DUPLICADO) {
         send(socketCliente, "RESERVA_DUPLICADA", 17, 0);
+    } else if (resultado == ITIN_EMPRESA_INDISPONIVEL) {
+        send(socketCliente, "EMPRESA_INDISPONIVEL", 20, 0);
     } else {
         send(socketCliente, "FALHA_ITINERARIO", 16, 0);
     }
@@ -1816,42 +1614,21 @@ void cancelar_carona(cJSON *jsonLogin, int socketCliente){
     }
 }
 
-//função para buscar os possiveis trechos partindo de uma origem
+//função para buscar os possiveis trechos partindo de uma origem (em todas as empresas do consórcio)
 void buscar_trechos_partida(cJSON *jsonLogin, int socketCliente){
-    cJSON *arrayResposta = cJSON_CreateArray();
     char *origemBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origem"));
-
-    int limite = lerLimiteIdTrechos();
-    for (int i = 0; i < limite; i++) {
-        cJSON *trechosJson = lerTrecho(i);
-        if (trechosJson == NULL) continue;
-
-        int id = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "idTrecho"));
-        char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "nomeMotorista"));
-        char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "origem"));
-        char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "destino"));
-        int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "capacidade"));
-        char *data = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "data"));
-        char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "hora"));
-        float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "preco"));
-
-        if (cidadeOrigem != NULL && origemBuscada != NULL &&
-            strcmp(cidadeOrigem, origemBuscada) == 0 && capacidade > 0) {
-            cJSON *item = cJSON_CreateObject();
-            cJSON_AddNumberToObject(item, "id", id);
-            cJSON_AddStringToObject(item, "nomeMotorista", nomeMotorista);
-            cJSON_AddStringToObject(item, "origem", cidadeOrigem);
-            cJSON_AddStringToObject(item, "destino", cidadeDestino);
-            cJSON_AddNumberToObject(item, "capacidade", capacidade);
-            cJSON_AddStringToObject(item, "data", data);
-            cJSON_AddStringToObject(item, "hora", hora);
-            cJSON_AddNumberToObject(item, "preco", preco);
-            cJSON_AddItemToArray(arrayResposta, item);
+    cJSON *todos = listarTrechosConsorcio(NULL);
+    cJSON *arrayResposta = cJSON_CreateArray();
+    cJSON *item;
+    cJSON_ArrayForEach(item, todos) {
+        char *o = cJSON_GetStringValue(cJSON_GetObjectItem(item, "origem"));
+        if (origemBuscada != NULL && o != NULL && strcmp(o, origemBuscada) == 0) {
+            cJSON_AddItemToArray(arrayResposta, cJSON_Duplicate(item, 1));
         }
-        cJSON_Delete(trechosJson);
     }
+    cJSON_Delete(todos);
     char *resposta = cJSON_PrintUnformatted(arrayResposta);
-    send(socketCliente, resposta, strlen(resposta), 0);
+    enviarTudo(socketCliente, resposta, strlen(resposta));
     free(resposta);
     cJSON_Delete(arrayResposta);
 }
@@ -1887,6 +1664,8 @@ void tratarCliente(int socketCliente, cJSON *jsonLogin, char *acao){
         listar_reservas(jsonLogin, socketCliente);
     } else if (strcmp(acao, "cancelar_carona") == 0) {
         cancelar_carona(jsonLogin, socketCliente);
+    } else if (strcmp(acao, "buscar_rotas") == 0) {
+        buscar_rotas_cliente(jsonLogin, socketCliente);
     } else if (strcmp(acao, "buscar_trechos_partida") == 0) {
         buscar_trechos_partida(jsonLogin, socketCliente);
     } else if (strcmp(acao, "listar_avisos") == 0) {
@@ -1970,200 +1749,18 @@ void *rotinaTratamento(void *arg){
 }
 
 
-/* ================= API REST ENTRE SERVIDORES (Problema 2) =================
- * Endpoints:
- *   GET  /api/v1/health
- *   GET  /api/v1/trechos
- *   GET  /api/v1/trechos/{id}
- *   POST /api/v1/trechos/{id}/reservas
- *
- * O cliente REST deve enviar JSON em UTF-8. A reserva de um trecho é
- * serializada pelo mutex local do trecho. Isto protege a capacidade dentro
- * desta empresa; atomicidade de uma rota com vários servidores exige a
- * etapa distribuída PREPARE/COMMIT/ABORT descrita no README e não é garantida
- * por uma única chamada de reserva.
- */
-#ifndef REST_PORT
-#define REST_PORT 8080
-#endif
-#define REST_BODY_MAX 65536
-
-struct RestRequest {
-    char *body;
-    size_t size;
-};
-
-static enum MHD_Result responderRest(struct MHD_Connection *connection,
-                                     unsigned int status, const char *body) {
-    const char *payload = body ? body : "{}";
-    struct MHD_Response *response = MHD_create_response_from_buffer(
-        strlen(payload), (void *)payload, MHD_RESPMEM_MUST_COPY);
-    if (!response) return MHD_NO;
-    MHD_add_response_header(response, "Content-Type", "application/json; charset=utf-8");
-    MHD_add_response_header(response, "Access-Control-Allow-Origin", "*");
-    MHD_add_response_header(response, "Connection", "close");
-    enum MHD_Result ret = MHD_queue_response(connection, status, response);
-    MHD_destroy_response(response);
-    return ret;
-}
-
-static char *restErro(const char *codigo, const char *mensagem) {
-    cJSON *j = cJSON_CreateObject();
-    cJSON_AddStringToObject(j, "erro", codigo);
-    cJSON_AddStringToObject(j, "mensagem", mensagem);
-    char *out = cJSON_PrintUnformatted(j);
-    cJSON_Delete(j);
-    return out;
-}
-
-static cJSON *restListarTrechos(void) {
-    cJSON *arr = cJSON_CreateArray();
-    int limite = lerLimiteIdTrechos();
-    for (int i = 0; i < limite; i++) {
-        cJSON *t = lerTrecho(i);
-        if (!t) continue;
-        cJSON *item = cJSON_CreateObject();
-        cJSON *v;
-        const char *strings[] = {"nomeMotorista","emailMotorista","origem","destino","data","hora"};
-        for (size_t k=0; k<sizeof(strings)/sizeof(strings[0]); k++) {
-            v = cJSON_GetObjectItemCaseSensitive(t, strings[k]);
-            if (cJSON_IsString(v)) cJSON_AddStringToObject(item, strings[k], v->valuestring);
-        }
-        const char *nums[] = {"idTrecho","capacidade","preco"};
-        for (size_t k=0; k<sizeof(nums)/sizeof(nums[0]); k++) {
-            v = cJSON_GetObjectItemCaseSensitive(t, nums[k]);
-            if (cJSON_IsNumber(v)) cJSON_AddNumberToObject(item, nums[k], v->valuedouble);
-        }
-        cJSON_AddItemToArray(arr, item);
-        cJSON_Delete(t);
-    }
-    return arr;
-}
-
-static enum MHD_Result handlerApiRest(void *cls, struct MHD_Connection *connection,
-    const char *url, const char *method, const char *version,
-    const char *upload_data, size_t *upload_data_size, void **con_cls) {
-    (void)cls; (void)version;
-    struct RestRequest *req = (struct RestRequest *)*con_cls;
-    if (!req) {
-        req = calloc(1, sizeof(*req));
-        if (!req) return MHD_NO;
-        *con_cls = req;
-        return MHD_YES;
-    }
-
-    if (strcmp(method, "OPTIONS") == 0) {
-        struct MHD_Response *r = MHD_create_response_from_buffer(0, "", MHD_RESPMEM_PERSISTENT);
-        if (!r) return MHD_NO;
-        MHD_add_response_header(r, "Access-Control-Allow-Origin", "*");
-        MHD_add_response_header(r, "Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-        MHD_add_response_header(r, "Access-Control-Allow-Headers", "Content-Type");
-        enum MHD_Result ret = MHD_queue_response(connection, MHD_HTTP_NO_CONTENT, r);
-        MHD_destroy_response(r);
-        return ret;
-    }
-
-    if (*upload_data_size > 0) {
-        if (req->size + *upload_data_size > REST_BODY_MAX) {
-            *upload_data_size = 0;
-            return responderRest(connection, MHD_HTTP_CONTENT_TOO_LARGE,
-                                 "{\"erro\":\"CORPO_MUITO_GRANDE\"}");
-        }
-        char *novo = realloc(req->body, req->size + *upload_data_size + 1);
-        if (!novo) { *upload_data_size = 0; return MHD_NO; }
-        req->body = novo;
-        memcpy(req->body + req->size, upload_data, *upload_data_size);
-        req->size += *upload_data_size;
-        req->body[req->size] = '\0';
-        *upload_data_size = 0;
-        return MHD_YES;
-    }
-
-    if (strcmp(method, "GET") == 0 && strcmp(url, "/api/v1/health") == 0)
-        return responderRest(connection, MHD_HTTP_OK,
-            "{\"status\":\"ok\",\"servico\":\"vaijunto\",\"api\":\"v1\"}");
-
-    if (strcmp(method, "GET") == 0 && strcmp(url, "/api/v1/trechos") == 0) {
-        cJSON *arr = restListarTrechos();
-        char *out = cJSON_PrintUnformatted(arr);
-        cJSON_Delete(arr);
-        enum MHD_Result ret = responderRest(connection, MHD_HTTP_OK, out ? out : "[]");
-        free(out);
-        return ret;
-    }
-
-    int id = -1;
-    char sobra = '\0';
-    if (sscanf(url, "/api/v1/trechos/%d%c", &id, &sobra) >= 1 && id >= 0) {
-        if (strcmp(method, "GET") == 0 && (sobra == '\0' || sobra == '?')) {
-            cJSON *t = lerTrecho(id);
-            if (!t) {
-                char *err = restErro("TRECHO_NAO_ENCONTRADO", "Não existe trecho com esse ID.");
-                enum MHD_Result ret = responderRest(connection, MHD_HTTP_NOT_FOUND, err);
-                free(err); return ret;
-            }
-            char *out = cJSON_PrintUnformatted(t);
-            cJSON_Delete(t);
-            enum MHD_Result ret = responderRest(connection, MHD_HTTP_OK, out ? out : "{}");
-            free(out); return ret;
-        }
-
-        if (strcmp(method, "POST") == 0 &&
-            strcmp(url + strlen(url) - (strlen("/reservas") < strlen(url) ? strlen("/reservas") : strlen(url)),
-                   "/reservas") == 0) {
-            cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
-            if (!body) {
-                char *err = restErro("JSON_INVALIDO", "Envie um objeto JSON válido.");
-                enum MHD_Result ret = responderRest(connection, MHD_HTTP_BAD_REQUEST, err);
-                free(err); return ret;
-            }
-            cJSON *idJson = cJSON_CreateNumber(id);
-            cJSON_AddItemToObject(body, "idSelecionado", idJson);
-            int resultado = reservarAssentoTrecho(body, NULL);
-            cJSON_Delete(body);
-            if (resultado == RESERVA_OK) {
-                char out[256];
-                snprintf(out, sizeof(out), "{\"status\":\"reservada\",\"idTrecho\":%d}", id);
-                return responderRest(connection, MHD_HTTP_CREATED, out);
-            }
-            if (resultado == RESERVA_SEM_ASSENTO) {
-                char *err = restErro("SEM_ASSENTOS", "Não há assentos disponíveis.");
-                enum MHD_Result ret = responderRest(connection, MHD_HTTP_CONFLICT, err);
-                free(err); return ret;
-            }
-            if (resultado == RESERVA_ERRO) {
-                char *err = restErro("ERRO_PERSISTENCIA", "Não foi possível gravar a reserva.");
-                enum MHD_Result ret = responderRest(connection, MHD_HTTP_INTERNAL_SERVER_ERROR, err);
-                free(err); return ret;
-            }
-            char *err = restErro("TRECHO_NAO_ENCONTRADO", "Trecho inexistente ou origem/destino incompatíveis.");
-            enum MHD_Result ret = responderRest(connection, MHD_HTTP_NOT_FOUND, err);
-            free(err); return ret;
-        }
-    }
-
-    char *err = restErro("ROTA_NAO_ENCONTRADA", "Endpoint REST não encontrado.");
-    enum MHD_Result ret = responderRest(connection, MHD_HTTP_NOT_FOUND, err);
-    free(err);
-    return ret;
-}
-
-static void liberarRequisicaoRest(void *cls, struct MHD_Connection *connection,
-                                  void **con_cls, enum MHD_RequestTerminationCode toe) {
-    (void)cls; (void)connection; (void)toe;
-    struct RestRequest *req = (struct RestRequest *)*con_cls;
-    if (req) { free(req->body); free(req); *con_cls = NULL; }
-}
-
-
 int main(){
     int socketServidor;
     int socketCliente;
     struct sockaddr_in endereco_servidor;
     struct sockaddr_in endereco_conexao;
-    int limite_clientes = 10;
+    int limite_clientes = 128;
     socklen_t tamanho_endereco;
     int valor_opcao = 1;
+    //cria as pastas de dados (o servidor pode iniciar num diretório/volume vazio)
+    const char *pastas[] = {"logs", "dados", "ArquivoID", DIR_TRECHOS, "Avisos", "transacoes"};
+    for (size_t k = 0; k < sizeof(pastas) / sizeof(pastas[0]); k++) mkdir(pastas[k], 0755);
+    signal(SIGPIPE, SIG_IGN);
     //atualiza o id do trecho
     encontrarID();
     //acerta o contador conforme os arquivos que existem
@@ -2171,22 +1768,32 @@ int main(){
     //pasta dos itinerários; desfaz os que ficaram PENDENTES se o servidor tiver caído antes
     mkdir(DIR_ITINERARIOS, 0755);
     recuperarItinerarios();
-    mapa = carregarGrafoDeArquivo("GrafoMapa/mapa.txt");
+    mapa = carregarGrafoDeArquivo("mapa.txt");
 
     if (mapa == NULL){
         log_mensagem(LOG_ERROR, "Falha ao criar o grafo de mapa: %m");
         exit(EXIT_FAILURE);
     }
     
-    /* API REST para comunicação entre empresas do consórcio. REST_PORT pode
-       ser sobrescrita na compilação com -DREST_PORT=8081, por exemplo. */
+    //configuração do consórcio + recuperação após queda (participante e coordenador do 2PC).
+    //Precisa vir depois de recuperarItinerarios e ANTES de aceitar qualquer requisição.
+    if (!consorcioIniciar()) {
+        log_mensagem(LOG_ERROR, "Falha ao iniciar o modulo do consorcio");
+        exit(EXIT_FAILURE);
+    }
+    const int PORT = consorcioPortaClientes();
+    const int REST_PORT = consorcioPortaRest();
+
+    /* API REST para comunicação entre empresas do consórcio. Uma thread por conexão: um PREPARE pode esperar
+       (wait-die) por um COMMIT/ABORT que chega em outra conexão, então não pode haver uma única thread atendendo tudo. */
     struct MHD_Daemon *apiRest = MHD_start_daemon(
-        MHD_USE_INTERNAL_POLLING_THREAD,
+        MHD_USE_INTERNAL_POLLING_THREAD | MHD_USE_THREAD_PER_CONNECTION,
         REST_PORT,
         NULL, NULL,
-        &handlerApiRest, NULL,
-        MHD_OPTION_NOTIFY_COMPLETED, &liberarRequisicaoRest, NULL,
-        MHD_OPTION_CONNECTION_TIMEOUT, (unsigned int)5,
+        &consorcioHandlerRest, NULL,
+        MHD_OPTION_NOTIFY_COMPLETED, &consorcioLiberarRequisicao, NULL,
+        MHD_OPTION_CONNECTION_TIMEOUT, (unsigned int)15,
+        MHD_OPTION_CONNECTION_LIMIT, (unsigned int)1000,
         MHD_OPTION_END);
     if (apiRest == NULL) {
         log_mensagem(LOG_ERROR, "Não foi possível iniciar a API REST na porta %d", REST_PORT);

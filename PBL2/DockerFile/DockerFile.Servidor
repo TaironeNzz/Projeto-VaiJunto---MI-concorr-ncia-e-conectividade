@@ -1,44 +1,59 @@
-# Usar a imagem oficial do GCC para compilar código C
+# ---------------------------------------------------------------------------------------------
+# Servidor de UMA empresa do consórcio VaiJunto (um contêiner = uma empresa).
+# O contexto de build é a RAIZ do repositório (as pastas cJSON/, GrafoMapa/ e src/ ficam ao lado de DockerFile/):
+#
+#   docker build -t vaijunto-servidor -f DockerFile/DockerFile.Servidor .
+#
+# Execução (uma empresa por computador do laboratório; ver docker-compose.empresa.yml e o README):
+#   docker run -d --name empresa1 \
+#     -e EMPRESA_ID=1 \
+#     -e PEERS="2=http://IP_EMPRESA2:8080,3=http://IP_EMPRESA3:8080" \
+#     -p 65432:65432 -p 8080:8080 \
+#     -v empresa1-dados:/srv/empresa \
+#     vaijunto-servidor
+#
+# Portas: 65432 = clientes/motoristas (TCP + JSON) | 8080 = API REST entre empresas (HTTP).
+# Todo o estado (trechos, itinerários, log de transações do 2PC, relógio de Lamport) fica em /srv/empresa,
+# que deve ser um VOLUME para sobreviver a `docker kill` / `docker restart`.
+# ---------------------------------------------------------------------------------------------
 FROM gcc:latest
 
-# Instalar a libmicrohttpd (usada pela API REST do servidor)
-RUN apt-get update && apt-get install -y --no-install-recommends libmicrohttpd-dev \
-    && rm -rf /var/lib/apt/lists/*
+# libmicrohttpd: API REST | curl: healthcheck
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libmicrohttpd-dev curl \
+ && rm -rf /var/lib/apt/lists/*
 
-# Definir o diretório de trabalho dentro do container
 WORKDIR /app
-
-# Copiar as pastas de código e o mapa (contexto de build = raiz do projeto)
-COPY src/ ./src/
 COPY cJSON/ ./cJSON/
 COPY GrafoMapa/ ./GrafoMapa/
-COPY mapa.txt ./mapa.txt
+COPY src/formatos.h ./src/formatos.h
+# a pasta "Consórcio" (com acento) vira "consorcio" dentro da imagem, para evitar problemas de codificação de nomes
+COPY src/Consorcio/ ./consorcio/
 
-# Criar os diretórios que o servidor usa para gravar arquivos
-RUN mkdir -p logs trechosCadastrados dados ArquivoID Avisos Itinerarios
+# Todos os módulos do servidor: servidor + consórcio (2PC) + relógio de Lamport + grafo do mapa + cJSON.
+# Cada módulo inclui os outros por "nome.h", então as pastas entram no caminho de busca com -I.
+RUN gcc -O2 -Wall -Wno-unused-variable -Wno-unused-function \
+        -I cJSON -I GrafoMapa -I src -I consorcio \
+        -o /usr/local/bin/servidor_bin \
+        consorcio/servidor.c consorcio/consorcio.c consorcio/lamport.c GrafoMapa/grafomapa.c cJSON/cJSON.c \
+        -lmicrohttpd -pthread
 
-# Compilar o servidor com as dependências (threads, libmicrohttpd e cJSON)
-RUN gcc -I cJSON -I GrafoMapa -I src \
-    src/servidor.c GrafoMapa/grafomapa.c cJSON/cJSON.c \
-    -o servidor_bin -lmicrohttpd -pthread -lm
+# diretório de trabalho com os dados persistentes (o servidor cria as subpastas sozinho)
+RUN mkdir -p /srv/empresa
+VOLUME ["/srv/empresa"]
 
-# Portas: 65432 = clientes/motoristas (TCP); 8080 = API REST entre servidores
-EXPOSE 65432
-EXPOSE 8080
+# configuração do consórcio (sobrescrevível com -e ...)
+ENV EMPRESA_ID=1 \
+    PORTA_CLIENTES=65432 \
+    PORTA_REST=8080 \
+    PEERS="" \
+    MODO_TESTE=0
 
-# Executar a partir da RAIZ do projeto:
-# docker build -t app-servidor -f DockerFile/DockerFile.Servidor .
-#
-# docker run -it \
-#   --name servidor \
-#   -p 65432:65432 -p 8080:8080 \
-#   -v "$(pwd)/dados:/app/dados" \
-#   -v "$(pwd)/trechosCadastrados:/app/trechosCadastrados" \
-#   -v "$(pwd)/ArquivoID:/app/ArquivoID" \
-#   -v "$(pwd)/Avisos:/app/Avisos" \
-#   -v "$(pwd)/Itinerarios:/app/Itinerarios" \
-#   -v "$(pwd)/logs:/app/logs" \
-#   app-servidor
+EXPOSE 65432 8080
 
-# Comando para iniciar o servidor
-CMD ["./servidor_bin"]
+HEALTHCHECK --interval=5s --timeout=2s --start-period=3s --retries=3 \
+    CMD curl -fs http://127.0.0.1:${PORTA_REST}/api/v1/health || exit 1
+
+# o servidor lê "mapa.txt" do diretório corrente: copia o mapa (GrafoMapa/mapa.txt) para o diretório de dados
+WORKDIR /srv/empresa
+CMD ["sh", "-c", "cp -f /app/GrafoMapa/mapa.txt /srv/empresa/mapa.txt && exec /usr/local/bin/servidor_bin"]

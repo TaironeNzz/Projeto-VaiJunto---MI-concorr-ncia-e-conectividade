@@ -4,11 +4,9 @@
 #include <stdbool.h>
 #include <strings.h>
 #include "grafomapa.h"
+#include "consorcio.h"   /* listarTrechosConsorcio: trechos de todas as empresas (local + pares) */
 
 extern Grafo *mapa;
-//fornecidos por servidor.c: cada trecho fica em um arquivo proprio, lido com o mutex do proprio trecho
-extern int lerLimiteIdTrechos(void);
-extern cJSON *lerTrecho(int id);
 
 bool existeCaminhoBFSPorNome(Grafo* g, const char* origem, const char* destino) {
     if (!g || !origem || !destino) return false;
@@ -99,18 +97,28 @@ int buscarIdPorNome(Grafo* g, const char* nome) {
     return -1;
 }
 
-void oferecerCarona(Grafo* g, int idTrecho, int origId, int destId, const char* nomeMotorista) {
-    Carona* nova = (Carona*)malloc(sizeof(Carona));
+void oferecerCaronaCompleta(Grafo* g, int idTrecho, int empresaId, int origId, int destId,
+                            const char* nomeMotorista, const char* data, const char* hora, double preco) {
+    Carona* nova = (Carona*)calloc(1, sizeof(Carona));
+    if (!nova) return;
     nova->idTrecho = idTrecho;
     nova->idDestino = destId;
-    strncpy(nova->nomeMotorista, nomeMotorista, 49);
-    nova->nomeMotorista[49] = '\0';
+    nova->empresaId = empresaId;
+    nova->preco = preco;
+    snprintf(nova->nomeMotorista, sizeof(nova->nomeMotorista), "%s", nomeMotorista ? nomeMotorista : "");
+    snprintf(nova->data, sizeof(nova->data), "%s", data ? data : "");
+    snprintf(nova->hora, sizeof(nova->hora), "%s", hora ? hora : "");
     nova->prox = g->cidades[origId].listaCaronas;
     g->cidades[origId].listaCaronas = nova;
 }
 
+void oferecerCarona(Grafo* g, int idTrecho, int origId, int destId, const char* nomeMotorista) {
+    oferecerCaronaCompleta(g, idTrecho, 0, origId, destId, nomeMotorista, "", "", 0);
+}
+
 static void dfsParaJSON(Grafo* mapaBase, Grafo* grafoCaronas, int atual, int destino, 
                         int visitado[], Trecho caminho[], int tamCaminho, cJSON *arrayResposta) {
+    if (cJSON_GetArraySize(arrayResposta) >= MAX_ROTAS_RESPOSTA) return;   /* evita explosão combinatória */
     if (atual == destino) {
         cJSON *objetoRota = cJSON_CreateObject();
         cJSON *arrayTrechos = cJSON_CreateArray();
@@ -118,9 +126,13 @@ static void dfsParaJSON(Grafo* mapaBase, Grafo* grafoCaronas, int atual, int des
         for (int i = 0; i < tamCaminho; i++) {
             cJSON *itemTrecho = cJSON_CreateObject();
             cJSON_AddNumberToObject(itemTrecho, "id", caminho[i].idTrecho);
+            cJSON_AddNumberToObject(itemTrecho, "empresaId", caminho[i].empresaId);
             cJSON_AddStringToObject(itemTrecho, "origem", mapaBase->cidades[caminho[i].idOrigem].nome);
             cJSON_AddStringToObject(itemTrecho, "destino", mapaBase->cidades[caminho[i].idDestino].nome);
             cJSON_AddStringToObject(itemTrecho, "nomeMotorista", caminho[i].nomeMotorista);
+            cJSON_AddStringToObject(itemTrecho, "data", caminho[i].data);
+            cJSON_AddStringToObject(itemTrecho, "hora", caminho[i].hora);
+            cJSON_AddNumberToObject(itemTrecho, "preco", caminho[i].preco);
             cJSON_AddItemToArray(arrayTrechos, itemTrecho);
         }
 
@@ -129,6 +141,7 @@ static void dfsParaJSON(Grafo* mapaBase, Grafo* grafoCaronas, int atual, int des
         return;
     }
 
+    if (tamCaminho >= MAX_TRECHOS_ROTA) return;
     visitado[atual] = 1;
 
     Carona* c = grafoCaronas->cidades[atual].listaCaronas;
@@ -139,7 +152,11 @@ static void dfsParaJSON(Grafo* mapaBase, Grafo* grafoCaronas, int atual, int des
             caminho[tamCaminho].idTrecho = c->idTrecho;
             caminho[tamCaminho].idOrigem = atual;
             caminho[tamCaminho].idDestino = vizinho;
-            strcpy(caminho[tamCaminho].nomeMotorista, c->nomeMotorista);
+            caminho[tamCaminho].empresaId = c->empresaId;
+            caminho[tamCaminho].preco = c->preco;
+            snprintf(caminho[tamCaminho].nomeMotorista, sizeof(caminho[tamCaminho].nomeMotorista), "%s", c->nomeMotorista);
+            snprintf(caminho[tamCaminho].data, sizeof(caminho[tamCaminho].data), "%s", c->data);
+            snprintf(caminho[tamCaminho].hora, sizeof(caminho[tamCaminho].hora), "%s", c->hora);
 
             dfsParaJSON(mapaBase, grafoCaronas, vizinho, destino, visitado, caminho, tamCaminho + 1, arrayResposta);
         }
@@ -150,12 +167,15 @@ static void dfsParaJSON(Grafo* mapaBase, Grafo* grafoCaronas, int atual, int des
 }
 
 // RETORNA O OBJETO cJSON PARA O SERVIDOR
-// Le os trechos de trechosCadastrados/trecho<ID>.json (um mutex por trecho, travado dentro de lerTrecho)
+// Monta o grafo de caronas com os trechos de TODAS as empresas do consórcio (listarTrechosConsorcio: local + pares;
+// empresas fora do ar são ignoradas) e enumera os itinerários origem -> destino.
+// Os ids devolvidos já estão no formato esperado por "confirmar_itinerario" (empresaId * ID_STRIDE + idLocal para pares).
 cJSON* buscar_rotas_no_grafo(cJSON *jsonLogin) {
     cJSON *arrayResposta = cJSON_CreateArray();
 
     char *origemBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "origem"));
     char *destinoBuscado = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "destino"));
+    char *dataBuscada = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "data"));
 
     if (origemBuscada == NULL || destinoBuscado == NULL) {
         return arrayResposta;
@@ -166,28 +186,28 @@ cJSON* buscar_rotas_no_grafo(cJSON *jsonLogin) {
         return arrayResposta;
     }
 
-    int limite = lerLimiteIdTrechos();
-    for (int i = 0; i < limite; i++) {
-        cJSON *trechoJson = lerTrecho(i);
-        if (trechoJson == NULL) continue;
-
-        // o servidor grava o id do trecho no campo "idTrecho"
-        cJSON *idObj = cJSON_GetObjectItem(trechoJson, "idTrecho");
+    cJSON *todos = listarTrechosConsorcio(dataBuscada);
+    cJSON *trechoJson = NULL;
+    cJSON_ArrayForEach(trechoJson, todos) {
+        cJSON *idObj = cJSON_GetObjectItem(trechoJson, "id");
         char *motorista = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "nomeMotorista"));
         char *origem = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "origem"));
         char *destino = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "destino"));
-        int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechoJson, "capacidade"));
+        char *data = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "data"));
+        char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "hora"));
+        cJSON *empObj = cJSON_GetObjectItem(trechoJson, "empresaId");
+        cJSON *precoObj = cJSON_GetObjectItem(trechoJson, "preco");
 
-        if (capacidade > 0 && origem != NULL && destino != NULL && motorista != NULL && idObj != NULL) {
+        if (idObj != NULL && origem != NULL && destino != NULL && motorista != NULL) {
             int idOrigem = buscarIdPorNome(mapa, origem);
             int idDestino = buscarIdPorNome(mapa, destino);
-
             if (idOrigem != -1 && idDestino != -1) {
-                oferecerCarona(grafoCaronas, idObj->valueint, idOrigem, idDestino, motorista);
+                oferecerCaronaCompleta(grafoCaronas, idObj->valueint, empObj ? empObj->valueint : 0, idOrigem, idDestino,
+                                       motorista, data, hora, precoObj ? precoObj->valuedouble : 0);
             }
         }
-        cJSON_Delete(trechoJson);
     }
+    cJSON_Delete(todos);
 
     int origId = buscarIdPorNome(mapa, origemBuscada);
     int destId = buscarIdPorNome(mapa, destinoBuscado);

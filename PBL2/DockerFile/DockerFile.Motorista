@@ -1,19 +1,13 @@
-# Usar a imagem oficial do GCC
+# Cliente (motorista). Contexto de build = RAIZ do repositório:
+#   docker build -t app-motorista -f DockerFile/DockerFile.Motorista .
+#   docker run -it --rm app-motorista                     (informe o IP/host do servidor da SUA empresa)
+# Com o docker-compose: docker compose run --rm motorista
 FROM gcc:latest
 
-# Definir o diretório de trabalho
 WORKDIR /app
-
-# Copiar apenas as pastas necessárias (contexto de build = raiz do projeto)
-COPY src/ ./src/
 COPY cJSON/ ./cJSON/
+COPY src/motorista.c src/formatos.h ./src/
 
-# Compilar o aplicativo do motorista com a biblioteca cJSON
-RUN gcc -I cJSON -I src src/motorista.c cJSON/cJSON.c -o motorista_bin -lm
+RUN gcc -Wall -I cJSON -I src src/motorista.c cJSON/cJSON.c -o /usr/local/bin/motorista_bin
 
-# Executar a partir da RAIZ do projeto:
-# docker build -t app-motorista -f DockerFile/DockerFile.Motorista .
-# docker run -it app-motorista
-
-# Comando para iniciar o motorista
-CMD ["./motorista_bin"]
+CMD ["motorista_bin"]

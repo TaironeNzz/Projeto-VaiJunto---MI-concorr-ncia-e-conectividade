@@ -2,7 +2,7 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <fcntl.h>
-#include "../cJSON/cJSON.h"
+#include "cJSON.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -13,6 +13,57 @@
 #include "formatos.h"
 
 #define PORT 65432
+#define LIMITE_RESPOSTA (16u * 1024u * 1024u)   //teto de segurança para uma resposta (16 MiB)
+
+//Lê UMA resposta do servidor com um buffer que cresce por realloc (dobra de tamanho quando enche), sem tamanho máximo
+//fixo: a lista de caronas de 3 empresas pode passar de qualquer buffer estático e chega dividida em vários pacotes TCP.
+//  - resposta JSON ('{' ou '[')  : lê até o JSON ficar completo e o devolve parseado em *json
+//  - qualquer outra coisa        : é mensagem de erro em texto (ASSENTO_INDISPONIVEL, NAO_AUTENTICADO...); devolvida
+//                                  em *texto sem parse (senão o read ficaria esperando um JSON que nunca vem)
+//*texto sempre recebe uma string alocada (o chamador faz free); *json é NULL quando a resposta não é JSON.
+//Retorno:  1 = JSON completo | 0 = texto de erro | -1 = servidor offline | -2 = sem memória / resposta grande demais
+static int lerResposta(int socketCliente, char **texto, cJSON **json) {
+    size_t capacidade = 4096, total = 0;
+    char *buf = malloc(capacidade);
+    *texto = NULL;
+    *json = NULL;
+    if (buf == NULL) return -2;
+    buf[0] = '\0';
+
+    while (1) {
+        if (total + 1 >= capacidade) {                         //buffer cheio: dobra com realloc
+            if (capacidade >= LIMITE_RESPOSTA) { free(buf); return -2; }
+            char *novo = realloc(buf, capacidade * 2);
+            if (novo == NULL) { free(buf); return -2; }        //em falha o bloco original continua válido: libera aqui
+            buf = novo;
+            capacidade *= 2;
+        }
+
+        ssize_t bytes = read(socketCliente, buf + total, capacidade - 1 - total);
+        if (bytes <= 0) { free(buf); return -1; }              //servidor caiu ou fechou a conexão
+        total += (size_t)bytes;
+        buf[total] = '\0';
+
+        size_t ini = 0;
+        while (buf[ini] == ' ' || buf[ini] == '\n' || buf[ini] == '\r' || buf[ini] == '\t') ini++;
+        if (buf[ini] != '{' && buf[ini] != '[') {              //não é JSON: mensagem de erro em texto
+            *texto = buf;
+            return 0;
+        }
+
+        //só tenta o parse quando o texto termina com '}' ou ']' (evita reparsear a cada pedaço parcial)
+        size_t fim = total;
+        while (fim > ini && (buf[fim - 1] == ' ' || buf[fim - 1] == '\n' || buf[fim - 1] == '\r' || buf[fim - 1] == '\t')) fim--;
+        if (fim > ini && (buf[fim - 1] == '}' || buf[fim - 1] == ']')) {
+            cJSON *obj = cJSON_Parse(buf);
+            if (obj != NULL) {
+                *json = obj;
+                *texto = buf;
+                return 1;
+            }
+        }
+    }
+}
 
 //Função para enviar a requisição de cadastrar
 void enviarCadastro(int socketCliente, char *nome, char *email, char *senha, int escolha){
@@ -56,19 +107,16 @@ int confirmarItinerario(int socketCliente, Cliente *cliente, const char *origemR
     cJSON_Delete(pedido);
 
     //a confirmação chega como JSON ({"status":"ITINERARIO_CONFIRMADO",...}); os erros chegam como texto simples
-    char buffer_mensagem[1024] = {0};
-    int total = 0;
+    char *buffer_mensagem = NULL;
     cJSON *resposta = NULL;
-    while (resposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
-        ssize_t bytes = read(socketCliente, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
-        if (bytes <= 0) {
-            printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
-            return 0;
-        }
-        total += bytes;
-        buffer_mensagem[total] = '\0';
-        if (buffer_mensagem[0] != '{') break; //mensagem de erro em texto: não vai para o parse
-        resposta = cJSON_Parse(buffer_mensagem);
+    int rc = lerResposta(socketCliente, &buffer_mensagem, &resposta);
+    if (rc == -1) {
+        printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+        return 0;
+    }
+    if (rc == -2) {
+        printf("ERRO: resposta do servidor invalida ou memoria insuficiente\n");
+        return 0;
     }
 
     int confirmado = 0;
@@ -92,16 +140,19 @@ int confirmarItinerario(int socketCliente, Cliente *cliente, const char *origemR
         printf("Itinerario invalido (trechos nao formam um caminho continuo da origem ao destino).\n");
     } else if (strcmp(buffer_mensagem, "FALHA_ITINERARIO") == 0) {
         printf("O servidor nao conseguiu registrar o itinerario. Nenhuma reserva foi feita. Tente novamente.\n");
+    } else if (strcmp(buffer_mensagem, "EMPRESA_INDISPONIVEL") == 0) {
+        //consórcio: alguma empresa dona de um dos trechos está fora do ar (ou não respondeu a tempo)
+        printf("Uma das empresas do itinerario esta fora do ar no momento. Nenhuma reserva foi feita. Tente novamente em instantes.\n");
     } else {
         printf("Resposta desconhecida do servidor: %s\n", buffer_mensagem);
     }
+    free(buffer_mensagem);
     return confirmado;
 }
 
 //Função para o cliente montar a rota (vários trechos, de motoristas diferentes) até a cidade destino.
 //Os trechos são escolhidos apenas localmente: NADA é reservado até o itinerário completo ser confirmado no final.
 void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino, char *data, char *hora) {
-    char buffer_mensagem[8192] = {0};
     cJSON *rota = cJSON_CreateArray();
     int servidorOffline = 0;
     if (rota == NULL) { printf("Erro ao criar objeto JSON\n"); return; }
@@ -112,8 +163,6 @@ void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino,
 
     int sair = 0;
     while (!sair) {
-        int total = 0;
-        memset(buffer_mensagem, 0, sizeof(buffer_mensagem));
         //Cria o pacote cJSON para a requisição
         cJSON *pedido = cJSON_CreateObject();
         cJSON_AddStringToObject(pedido, "classe", "Cliente");
@@ -125,15 +174,13 @@ void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino,
         cJSON_Delete(pedido);
 
         cJSON *arrayResposta = NULL;
-        while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
-            ssize_t bytes = read(socketCliente, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
-            if (bytes <= 0) {
-                servidorOffline = 1;
-                break;
-            }
-            total += bytes;
-            buffer_mensagem[total] = '\0';
-            arrayResposta = cJSON_Parse(buffer_mensagem);
+        char *textoResposta = NULL;
+        int rc = lerResposta(socketCliente, &textoResposta, &arrayResposta);   //buffer dinâmico (realloc)
+        free(textoResposta);
+        if (rc == -1) servidorOffline = 1;
+        if (rc != 1 || !cJSON_IsArray(arrayResposta)) {                          //texto de erro, memória ou não é array
+            cJSON_Delete(arrayResposta);
+            arrayResposta = NULL;
         }
         if (servidorOffline) {
             printf("O SERVIDOR ESTA OFFLINE\n");
@@ -240,10 +287,8 @@ void criarRota(int socketCliente, Cliente *cliente, char *origem, char *destino,
 
 //função para buscar as caronas disponiveis 
 void buscarCarona(int socketCliente, Cliente *cliente) {
-    char buffer_mensagem[1024] = {0};
     char origem[50], destino[50];
     char data[11], hora[6];
-    int total = 0;
     int servidorOffline = 0;
 
     printf("Digite a origem da carona: ");
@@ -271,15 +316,13 @@ void buscarCarona(int socketCliente, Cliente *cliente) {
     cJSON_Delete(carona);
 
     cJSON *arrayResposta = NULL;
-    while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
-        ssize_t bytes = read(socketCliente, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
-        if (bytes <= 0) {
-            servidorOffline = 1;
-            break;
-        }
-        total += bytes;
-        buffer_mensagem[total] = '\0';
-        arrayResposta = cJSON_Parse(buffer_mensagem);
+    char *textoResposta = NULL;
+    int rc = lerResposta(socketCliente, &textoResposta, &arrayResposta);   //buffer dinâmico (realloc)
+    free(textoResposta);
+    if (rc == -1) servidorOffline = 1;
+    if (rc != 1 || !cJSON_IsArray(arrayResposta)) {                          //texto de erro, memória ou não é array
+        cJSON_Delete(arrayResposta);
+        arrayResposta = NULL;
     }
 
     if (servidorOffline) {
@@ -362,8 +405,6 @@ void buscarCarona(int socketCliente, Cliente *cliente) {
 
 //função para mostrar as caronas que o cliente reservou
 void ver_caronas(int socketCliente, Cliente *cliente){
-    char buffer_mensagem[4096] = {0};
-    int total = 0;
     int servidorOffline = 0;
 
     cJSON *enviar_dados = cJSON_CreateObject();
@@ -381,15 +422,13 @@ void ver_caronas(int socketCliente, Cliente *cliente){
     cJSON_Delete(enviar_dados);
 
     cJSON *arrayResposta = NULL;
-    while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
-        ssize_t bytes = read(socketCliente, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
-        if (bytes <= 0){ 
-            servidorOffline = 1;
-            break;
-        }
-        total += bytes;
-        buffer_mensagem[total] = '\0';
-        arrayResposta = cJSON_Parse(buffer_mensagem);
+    char *textoResposta = NULL;
+    int rc = lerResposta(socketCliente, &textoResposta, &arrayResposta);   //buffer dinâmico (realloc)
+    free(textoResposta);
+    if (rc == -1) servidorOffline = 1;
+    if (rc != 1 || !cJSON_IsArray(arrayResposta)) {                          //texto de erro, memória ou não é array
+        cJSON_Delete(arrayResposta);
+        arrayResposta = NULL;
     }
 
     if (servidorOffline) {
@@ -438,8 +477,6 @@ void ver_caronas(int socketCliente, Cliente *cliente){
 
 //função para cancelar uma carona do cliente
 void cancelar_carona(int socketCliente, Cliente *cliente){
-    char buffer_mensagem[4096] = {0};
-    int total = 0;
     int servidorOffline = 0;
 
     cJSON *enviar_dados = cJSON_CreateObject();
@@ -457,15 +494,13 @@ void cancelar_carona(int socketCliente, Cliente *cliente){
     cJSON_Delete(enviar_dados);
 
     cJSON *arrayResposta = NULL;
-    while (arrayResposta == NULL && total < (int)sizeof(buffer_mensagem) - 1) {
-        ssize_t bytes = read(socketCliente, buffer_mensagem + total, sizeof(buffer_mensagem) - 1 - total);
-        if (bytes <= 0){
-            servidorOffline = 1;
-            break;
-        } 
-        total += bytes;
-        buffer_mensagem[total] = '\0';
-        arrayResposta = cJSON_Parse(buffer_mensagem);
+    char *textoResposta = NULL;
+    int rc = lerResposta(socketCliente, &textoResposta, &arrayResposta);   //buffer dinâmico (realloc)
+    free(textoResposta);
+    if (rc == -1) servidorOffline = 1;
+    if (rc != 1 || !cJSON_IsArray(arrayResposta)) {                          //texto de erro, memória ou não é array
+        cJSON_Delete(arrayResposta);
+        arrayResposta = NULL;
     }
 
     if (servidorOffline) {
@@ -538,6 +573,7 @@ void cancelar_carona(int socketCliente, Cliente *cliente){
         }
         cJSON_Delete(respostaSelecionada);
 
+        char buffer_mensagem[128] = {0};   //resposta curta de status (CARONA_CANCELADA ou um código de erro)
         int bytes = read(socketCliente, buffer_mensagem, sizeof(buffer_mensagem) - 1);
         if (bytes > 0) {
             buffer_mensagem[bytes] = '\0';
@@ -652,10 +688,8 @@ void ver_notificacoes(int socketCliente, Cliente *cliente){
 }
 
 void telaMenu(int socketCliente, Cliente *cliente){
-    char buffer_mensagem[18] = {0};
     int escolha = 0;
     int sair = 0;
-    int enviou = 0;
 
     while(sair != 1){
         printf("====================================\n");
@@ -688,7 +722,6 @@ void telaMenu(int socketCliente, Cliente *cliente){
 }
 
 void telaLogin(int socketCliente, Cliente *cliente){
-    char buffer_mensagem[18] = {0};
     int escolha = 0;
     int sair = 0;
     int autenticado = 0;
@@ -728,31 +761,35 @@ void telaLogin(int socketCliente, Cliente *cliente){
             return;
         }
 
-        int bytes = read(socketCliente, buffer_mensagem, sizeof(buffer_mensagem) - 1);
-        if (bytes > 0) {
-            buffer_mensagem[bytes] = '\0';
-            if (strcmp(buffer_mensagem, "NAO_AUTENTICADO") == 0) {
+        //a resposta do login é {"nome":"..."} (tamanho depende do nome) ou um texto de erro: leitura com buffer dinâmico
+        char *textoResposta = NULL;
+        cJSON *respostaJSON = NULL;
+        int rc = lerResposta(socketCliente, &textoResposta, &respostaJSON);
+        if (rc == -1) {
+            printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+        } else if (rc == -2) {
+            printf("ERRO: resposta do servidor invalida ou memoria insuficiente\n");
+        } else if (rc == 0) {
+            if (strcmp(textoResposta, "NAO_AUTENTICADO") == 0) {
                 printf("Email ou senha incorretos. Tente novamente.\n");
-            } else if (strcmp(buffer_mensagem, "DADOS_INVALIDOS") == 0) {
+            } else if (strcmp(textoResposta, "DADOS_INVALIDOS") == 0) {
                 printf("Preencha todos os campos! Tente novamente.\n");
-            }
-            
-            cJSON *respostaJSON = cJSON_Parse(buffer_mensagem);
-            if (respostaJSON != NULL){
-                char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(respostaJSON, "nome"));
-                if (nome != NULL) {
-                    printf("Login realizado com sucesso!\n");
-                    cliente->status = AUTENTICADO;
-                    strncpy(cliente->nome, nome, sizeof(cliente->nome) - 1);
-                    cliente->nome[sizeof(cliente->nome) - 1] = '\0';
-                    autenticado = 1;
-                    telaMenu(socketCliente, cliente);
-                }
-                cJSON_Delete(respostaJSON);
+            } else {
+                printf("Resposta desconhecida do servidor: %s\n", textoResposta);
             }
         } else {
-            printf("ERRO: O SERVIDOR ESTA OFFLINE\n");
+            char *nome = cJSON_GetStringValue(cJSON_GetObjectItem(respostaJSON, "nome"));
+            if (nome != NULL) {
+                printf("Login realizado com sucesso!\n");
+                cliente->status = AUTENTICADO;
+                strncpy(cliente->nome, nome, sizeof(cliente->nome) - 1);
+                cliente->nome[sizeof(cliente->nome) - 1] = '\0';
+                autenticado = 1;
+            }
         }
+        cJSON_Delete(respostaJSON);
+        free(textoResposta);
+        if (autenticado) telaMenu(socketCliente, cliente);   //depois de liberar a resposta (o menu é longo)
     }
 }
 

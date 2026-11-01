@@ -1,20 +1,14 @@
-# Usar a imagem oficial do GCC
+# Cliente (passageiro). Contexto de build = RAIZ do repositório:
+#   docker build -t app-cliente -f DockerFile/DockerFile.Cliente .
+#   docker run -it --rm app-cliente                       (informe o IP/host do servidor da SUA empresa)
+# Com o docker-compose: docker compose run --rm cliente   (host do servidor: empresa1, empresa2 ou empresa3)
 FROM gcc:latest
 
-# Definir o diretório de trabalho
 WORKDIR /app
-
-# Copiar apenas as pastas necessárias (contexto de build = raiz do projeto)
-COPY src/ ./src/
 COPY cJSON/ ./cJSON/
+COPY src/cliente.c src/formatos.h ./src/
 
-# Compilar o cliente com a biblioteca cJSON
-# -I indica onde estão os cabeçalhos (cJSON.h e formatos.h), sem precisar alterar os #include
-RUN gcc -I cJSON -I src src/cliente.c cJSON/cJSON.c -o cliente_bin -lm
+# cliente.c inclui "cJSON.h" e "formatos.h": as pastas entram com -I
+RUN gcc -Wall -I cJSON -I src src/cliente.c cJSON/cJSON.c -o /usr/local/bin/cliente_bin
 
-# Executar a partir da RAIZ do projeto:
-# docker build -t app-cliente -f DockerFile/DockerFile.Cliente .
-# docker run -it app-cliente
-
-# Comando para iniciar o cliente
-CMD ["./cliente_bin"]
+CMD ["cliente_bin"]

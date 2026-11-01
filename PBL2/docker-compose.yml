@@ -1,0 +1,73 @@
+# Três empresas do consórcio na MESMA máquina (desenvolvimento / testes).
+# Para a apresentação (um servidor por computador do laboratório) use docker-compose.empresa.yml.
+#
+#   docker compose up -d --build            # sobe empresa1, empresa2 e empresa3
+#   docker compose kill empresa2            # derruba uma empresa (queda abrupta)
+#   docker compose start empresa2           # ela volta e se recupera sozinha
+#   docker compose run --rm cliente         # cliente (passageiro)  -> IP do servidor: empresa1
+#   docker compose run --rm motorista       # cliente (motorista)   -> IP do servidor: empresa1
+x-servidor: &servidor
+  build:
+    context: .
+    dockerfile: DockerFile/DockerFile.Servidor
+  restart: "no"            # a queda precisa poder ser provocada pelo tutor e revertida manualmente
+  environment: &env
+    MODO_TESTE: "${MODO_TESTE:-0}"     # 1 = expõe campos de auditoria (usado pelo teste automatizado)
+    # parâmetros de tempo (vazio = padrão do servidor; o teste automatizado os reduz para terminar rápido)
+    PREPARE_TIMEOUT_MS: "${PREPARE_TIMEOUT_MS:-}"
+    DECISAO_TIMEOUT_MS: "${DECISAO_TIMEOUT_MS:-}"
+    INDOUBT_MS: "${INDOUBT_MS:-}"
+    SUSPEITA_MS: "${SUSPEITA_MS:-}"
+    PREPARED_TIMEOUT_MS: "${PREPARED_TIMEOUT_MS:-}"
+    ESPERA_CONFLITO_MS: "${ESPERA_CONFLITO_MS:-}"
+
+services:
+  empresa1:
+    <<: *servidor
+    container_name: empresa1
+    environment:
+      <<: *env
+      EMPRESA_ID: "1"
+      CRASH_AT: "${CRASH_AT_E1:-}"     # injeção de falha (teste): ex. CRASH_AT_E1=coord_apos_decisao
+      PEERS: "2=http://empresa2:8080,3=http://empresa3:8080"
+    ports: ["65431:65432", "8081:8080"]
+    volumes: ["empresa1-dados:/srv/empresa"]
+
+  empresa2:
+    <<: *servidor
+    container_name: empresa2
+    environment:
+      <<: *env
+      EMPRESA_ID: "2"
+      CRASH_AT: "${CRASH_AT_E2:-}"     # injeção de falha (teste): ex. CRASH_AT_E2=coord_apos_decisao
+      PEERS: "1=http://empresa1:8080,3=http://empresa3:8080"
+    ports: ["65432:65432", "8082:8080"]
+    volumes: ["empresa2-dados:/srv/empresa"]
+
+  empresa3:
+    <<: *servidor
+    container_name: empresa3
+    environment:
+      <<: *env
+      EMPRESA_ID: "3"
+      CRASH_AT: "${CRASH_AT_E3:-}"     # injeção de falha (teste): ex. CRASH_AT_E3=coord_apos_decisao
+      PEERS: "1=http://empresa1:8080,2=http://empresa2:8080"
+    ports: ["65433:65432", "8083:8080"]
+    volumes: ["empresa3-dados:/srv/empresa"]
+
+  # clientes interativos (reaproveitados do Problema 1): `docker compose run --rm cliente`
+  cliente:
+    build: { context: ., dockerfile: DockerFile/DockerFile.Cliente }
+    profiles: ["clientes"]
+    stdin_open: true
+    tty: true
+  motorista:
+    build: { context: ., dockerfile: DockerFile/DockerFile.Motorista }
+    profiles: ["clientes"]
+    stdin_open: true
+    tty: true
+
+volumes:
+  empresa1-dados:
+  empresa2-dados:
+  empresa3-dados:
