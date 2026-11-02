@@ -289,6 +289,34 @@ static void garantirIdMinimo(int id) {
     pthread_mutex_unlock(&idMutex);
 }
 
+/*
+ * O sinalizador "cancelando" bloqueia novas reservas enquanto o motorista coordena
+ * a compensação de todos os itinerários que usam o trecho. Se o processo cair nesse
+ * intervalo, nenhuma resposta de sucesso foi enviada ao motorista. Na reinicialização,
+ * retiramos o sinalizador para permitir nova tentativa; as transações já abortadas
+ * continuam abortadas no log durável de seus coordenadores.
+ */
+static void recuperarTrechosEmCancelamento(void) {
+    int limite = lerLimiteIdTrechos();
+    for (int id = 0; id < limite; id++) {
+        pthread_mutex_t *m = obterMutexTrecho(id);
+        if (!m) continue;
+        pthread_mutex_lock(m);
+        cJSON *trecho = lerTrechoNoLock(id);
+        if (trecho) {
+            if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(trecho, "cancelando"))) {
+                cJSON_DeleteItemFromObjectCaseSensitive(trecho, "cancelando");
+                if (gravarTrechoNoLock(id, trecho))
+                    log_mensagem(LOG_WARN, "Trecho %d: cancelamento interrompido por reinicializacao; liberado para nova tentativa", id);
+                else
+                    log_mensagem(LOG_ERROR, "Trecho %d: falha ao recuperar sinalizador de cancelamento", id);
+            }
+            cJSON_Delete(trecho);
+        }
+        pthread_mutex_unlock(m);
+    }
+}
+
 //conta os arquivos de trechos que existem de verdade e acerta o contador (chamada na inicialização)
 void recalcularContadorTrechos(void) {
     int limite = lerLimiteIdTrechos();
@@ -823,45 +851,122 @@ void removerItinerariosDoTrecho(int idTrechoCancelado);
 
 //função para cancelar trecho de um motorista
 void cancelarTrechoMotorista(cJSON *jsonLogin, int socketMotorista){
-    int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
+    int idSelecionado = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
     char *nomeMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nome"));
     char *emailMotorista = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
     if (emailMotorista == NULL){
-        log_mensagem(LOG_ERROR, "Falha ao cancelar trecho do motorista %s -> email nulo", nomeMotorista);
+        log_mensagem(LOG_ERROR, "Falha ao cancelar trecho do motorista %s -> email nulo", nomeMotorista ? nomeMotorista : "(desconhecido)");
         send(socketMotorista, "TRECHO_NAO_ENCONTRADO", 21, 0);
         return;
     }
-    int trechoEncontrado = 0;
 
-    //só o mutex do trecho selecionado fica travado; os outros trechos continuam livres
     pthread_mutex_t *mutexTrecho = obterMutexTrecho(idSelecionado);
-    if (mutexTrecho != NULL) {
-        pthread_mutex_lock(mutexTrecho);
-        cJSON *trechoJson = lerTrechoNoLock(idSelecionado);
-        if (trechoJson != NULL) {
-            char *nomeMotoristaTrecho = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "nomeMotorista"));
-            char *emailMotoristaTrecho = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "emailMotorista"));
+    if (mutexTrecho == NULL) {
+        send(socketMotorista, "TRECHO_NAO_ENCONTRADO", 21, 0);
+        return;
+    }
 
-            if (nomeMotorista != NULL && nomeMotoristaTrecho != NULL && emailMotoristaTrecho != NULL &&
-                strcmp(nomeMotorista, nomeMotoristaTrecho) == 0 && strcmp(emailMotorista, emailMotoristaTrecho) == 0) {
-                char caminho[128];
-                caminhoTrecho(idSelecionado, caminho, sizeof(caminho));
-                if (remove(caminho) == 0) {
-                    adicionarAvisoTrechoRemovido(trechoJson);
-                    log_mensagem(LOG_INFO, "Trecho ID %d cancelado pelo motorista %s", idSelecionado, emailMotorista);
-                    trechoEncontrado = 1;
-                } else {
-                    perror("Erro ao remover o arquivo do trecho");
+    /* Primeiro marca o trecho como cancelando e coleta as transações que o utilizam.
+       Isso impede que uma nova confirmação reserve o trecho durante a compensação. */
+    char **transacoes = NULL;
+    int nTransacoes = 0, marcado = 0;
+    pthread_mutex_lock(mutexTrecho);
+    cJSON *trechoJson = lerTrechoNoLock(idSelecionado);
+    if (trechoJson != NULL) {
+        const char *nomeTrecho = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "nomeMotorista"));
+        const char *emailTrecho = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "emailMotorista"));
+        if (nomeMotorista && emailTrecho && nomeTrecho &&
+            strcmp(nomeMotorista, nomeTrecho) == 0 && strcmp(emailMotorista, emailTrecho) == 0 &&
+            !cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(trechoJson, "cancelando"))) {
+            cJSON *reservas = cJSON_GetObjectItemCaseSensitive(trechoJson, "reservas");
+            cJSON *bloqueios = cJSON_GetObjectItemCaseSensitive(trechoJson, "bloqueios");
+            int nReservas = cJSON_IsArray(reservas) ? cJSON_GetArraySize(reservas) : 0;
+            int nBloqueios = cJSON_IsArray(bloqueios) ? cJSON_GetArraySize(bloqueios) : 0;
+            int total = nReservas + nBloqueios;
+            if (total > 0) transacoes = calloc((size_t)total, sizeof(char *));
+            int memoriaOk = (total == 0 || transacoes != NULL);
+            /* Importante: PREPARED ainda está em bloqueios, não em reservas.
+               O motorista precisa cancelar também essas transações antes de excluir o trecho. */
+            cJSON *fontes[] = { reservas, bloqueios };
+            for (size_t f = 0; f < sizeof(fontes) / sizeof(fontes[0]) && memoriaOk; f++) {
+                cJSON *it;
+                cJSON_ArrayForEach(it, fontes[f]) {
+                    const char *tx = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(it, "tx"));
+                    if (!tx || !*tx) continue;
+                    int repetida = 0;
+                    for (int j = 0; j < nTransacoes; j++)
+                        if (strcmp(transacoes[j], tx) == 0) { repetida = 1; break; }
+                    if (!repetida) {
+                        char *copiaTx = strdup(tx);
+                        if (!copiaTx) { memoriaOk = 0; break; }
+                        transacoes[nTransacoes++] = copiaTx;
+                    }
                 }
             }
+            if (memoriaOk) {
+                cJSON_DeleteItemFromObjectCaseSensitive(trechoJson, "cancelando");
+                cJSON_AddBoolToObject(trechoJson, "cancelando", 1);
+                marcado = gravarTrechoNoLock(idSelecionado, trechoJson);
+            }
+        }
+        cJSON_Delete(trechoJson);
+    }
+    pthread_mutex_unlock(mutexTrecho);
+
+    if (!marcado) {
+        for (int i = 0; i < nTransacoes; i++) free(transacoes[i]);
+        free(transacoes);
+        send(socketMotorista, "TRECHO_NAO_ENCONTRADO", 21, 0);
+        return;
+    }
+
+    int cancelamentoAceito = 1;
+    for (int i = 0; i < nTransacoes; i++) {
+        int rc = consorcioCancelarItinerarioTx(transacoes[i], "motorista cancelou um trecho participante");
+        if (rc == 0) {
+            cancelamentoAceito = 0;
+            log_mensagem(LOG_ERROR, "Trecho %d: nao foi possivel coordenar o cancelamento da tx %s", idSelecionado, transacoes[i]);
+        }
+        free(transacoes[i]);
+    }
+    free(transacoes);
+
+    if (!cancelamentoAceito) {
+        /* Não remove o trecho se não foi possível contactar algum coordenador. */
+        pthread_mutex_lock(mutexTrecho);
+        trechoJson = lerTrechoNoLock(idSelecionado);
+        if (trechoJson != NULL) {
+            cJSON_DeleteItemFromObjectCaseSensitive(trechoJson, "cancelando");
+            gravarTrechoNoLock(idSelecionado, trechoJson);
             cJSON_Delete(trechoJson);
         }
         pthread_mutex_unlock(mutexTrecho);
+        send(socketMotorista, "EMPRESA_INDISPONIVEL", 20, 0);
+        return;
     }
 
-    if (trechoEncontrado) {
+    /* A decisão de cancelar cada itinerário já está gravada nos respectivos coordenadores. */
+    int trechoRemovido = 0;
+    pthread_mutex_lock(mutexTrecho);
+    trechoJson = lerTrechoNoLock(idSelecionado);
+    if (trechoJson != NULL) {
+        char caminho[128];
+        caminhoTrecho(idSelecionado, caminho, sizeof(caminho));
+        if (remove(caminho) == 0) {
+            adicionarAvisoTrechoRemovido(trechoJson);
+            log_mensagem(LOG_INFO, "Trecho ID %d cancelado pelo motorista %s; %d transacao(oes) de itinerario coordenadas",
+                         idSelecionado, emailMotorista, nTransacoes);
+            trechoRemovido = 1;
+        } else {
+            perror("Erro ao remover o arquivo do trecho");
+        }
+        cJSON_Delete(trechoJson);
+    }
+    pthread_mutex_unlock(mutexTrecho);
+
+    if (trechoRemovido) {
         ajustarContadorTrechos(-1);
-        //o mutex do trecho já foi solto: a remoção dos itinerários trava um trecho por vez, nunca dois juntos
+        /* Compatibilidade com itinerários antigos sem registro 2PC. */
         removerItinerariosDoTrecho(idSelecionado);
         send(socketMotorista, "TRECHO_CANCELADO", 16, 0);
     } else {
@@ -1133,7 +1238,8 @@ static int reservarAssentoTrecho(cJSON *jsonLogin, char **jsonTrecho) {
         char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "origem"));
         char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(trechoJson, "destino"));
 
-        if (cidadeOrigem != NULL && cidadeDestino != NULL &&
+        if (!cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(trechoJson, "cancelando")) &&
+            cidadeOrigem != NULL && cidadeDestino != NULL &&
             cidadeOrigemCliente != NULL && cidadeDestinoCliente != NULL &&
             strcmp(cidadeOrigem, cidadeOrigemCliente) == 0 &&
             strcmp(cidadeDestino, cidadeDestinoCliente) == 0) {
@@ -1204,36 +1310,58 @@ void AddTrechoNaRota(cJSON *jsonLogin, int socketCliente){
 //função para o cliente cancelar uma reserva da carona
 int cancelarReservaInterna(int idSelecionado, char *emailCliente, char *nomeCliente) {
     int clienteEncontrado = 0;
-
     pthread_mutex_t *mutexTrecho = obterMutexTrecho(idSelecionado);
     if (mutexTrecho == NULL) return 0;
 
     pthread_mutex_lock(mutexTrecho);
     cJSON *trechoJson = lerTrechoNoLock(idSelecionado);
     if (trechoJson != NULL) {
-        cJSON *arrayClientes = cJSON_GetObjectItem(trechoJson, "clientes");
-        cJSON *arrayNomesClientes = cJSON_GetObjectItem(trechoJson, "nomesClientes");
-        int total = arrayClientes ? cJSON_GetArraySize(arrayClientes) : 0;
-        int totalNomes = arrayNomesClientes ? cJSON_GetArraySize(arrayNomesClientes) : 0;
+        cJSON *arrayClientes = cJSON_GetObjectItemCaseSensitive(trechoJson, "clientes");
+        cJSON *arrayNomes = cJSON_GetObjectItemCaseSensitive(trechoJson, "nomesClientes");
+        cJSON *arrayReservas = cJSON_GetObjectItemCaseSensitive(trechoJson, "reservas");
+        int total = cJSON_IsArray(arrayClientes) ? cJSON_GetArraySize(arrayClientes) : 0;
+        int indice = -1;
+
         for (int i = 0; i < total; i++) {
-            char *email = cJSON_GetStringValue(cJSON_GetArrayItem(arrayClientes, i));
-            if (email != NULL && emailCliente != NULL && strcmp(email, emailCliente) == 0) {
-                cJSON_DeleteItemFromArray(arrayClientes, i);
-                clienteEncontrado = 1;
-                int capacidadeAtual = cJSON_GetNumberValue(cJSON_GetObjectItem(trechoJson, "capacidade"));
-                cJSON_ReplaceItemInObject(trechoJson, "capacidade", cJSON_CreateNumber(capacidadeAtual + 1));
-                break;
-            }
-        }
-        for (int i = 0; i < totalNomes; i++) {
-            char *nome = cJSON_GetStringValue(cJSON_GetArrayItem(arrayNomesClientes, i));
-            if (nome != NULL && nomeCliente != NULL && strcmp(nome, nomeCliente) == 0) {
-                cJSON_DeleteItemFromArray(arrayNomesClientes, i);
+            const char *email = cJSON_GetStringValue(cJSON_GetArrayItem(arrayClientes, i));
+            if (email && emailCliente && strcmp(email, emailCliente) == 0) {
+                indice = i;
                 break;
             }
         }
 
-        //só regrava o arquivo se a reserva realmente foi removida
+        if (indice >= 0) {
+            cJSON_DeleteItemFromArray(arrayClientes, indice);
+            if (cJSON_IsArray(arrayNomes) && indice < cJSON_GetArraySize(arrayNomes)) {
+                cJSON_DeleteItemFromArray(arrayNomes, indice);
+            } else if (nomeCliente && cJSON_IsArray(arrayNomes)) {
+                /* Recupera arquivos antigos em que nomesClientes ficou desalinhado. */
+                int nNomes = cJSON_GetArraySize(arrayNomes);
+                for (int i = 0; i < nNomes; i++) {
+                    const char *nome = cJSON_GetStringValue(cJSON_GetArrayItem(arrayNomes, i));
+                    if (nome && strcmp(nome, nomeCliente) == 0) {
+                        cJSON_DeleteItemFromArray(arrayNomes, i);
+                        break;
+                    }
+                }
+            }
+
+            /* O registro tx/id precisa acompanhar a remoção do passageiro; caso contrário,
+               a auditoria conta uma reserva que já não ocupa assento. */
+            if (cJSON_IsArray(arrayReservas)) {
+                for (int i = cJSON_GetArraySize(arrayReservas) - 1; i >= 0; i--) {
+                    cJSON *r = cJSON_GetArrayItem(arrayReservas, i);
+                    const char *pid = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(r, "id"));
+                    if (pid && emailCliente && strcmp(pid, emailCliente) == 0)
+                        cJSON_DeleteItemFromArray(arrayReservas, i);
+                }
+            }
+
+            int capacidadeAtual = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(trechoJson, "capacidade"));
+            cJSON_ReplaceItemInObject(trechoJson, "capacidade", cJSON_CreateNumber(capacidadeAtual + 1));
+            clienteEncontrado = 1;
+        }
+
         if (clienteEncontrado && !gravarTrechoNoLock(idSelecionado, trechoJson)) {
             log_mensagem(LOG_ERROR, "Falha ao gravar o cancelamento da reserva no trecho ID %d", idSelecionado);
             clienteEncontrado = 0;
@@ -1241,7 +1369,6 @@ int cancelarReservaInterna(int idSelecionado, char *emailCliente, char *nomeClie
         cJSON_Delete(trechoJson);
     }
     pthread_mutex_unlock(mutexTrecho);
-
     return clienteEncontrado;
 }
 
@@ -1550,62 +1677,88 @@ void finalizar_Rota(cJSON *jsonLogin, int socketCliente){
 
 //função para obter as reservas do cliente
 void listar_reservas(cJSON *jsonLogin, int socketCliente){
-    cJSON *arrayResposta = cJSON_CreateArray();
-    char *emailCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "email"));
-    log_mensagem(LOG_INFO, "Consulta de reservas solicitada - Cliente: %s", emailCliente);
+    const char *emailCliente = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(jsonLogin, "email"));
+    if (!emailCliente) emailCliente = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(jsonLogin, "emailCliente"));
+    log_mensagem(LOG_INFO, "Consulta de reservas solicitada - Cliente: %s", emailCliente ? emailCliente : "(sem email)");
 
+    cJSON *arrayResposta = consorcioListarReservasCliente(emailCliente);
+    if (!cJSON_IsArray(arrayResposta)) arrayResposta = cJSON_CreateArray();
+
+    /* Mantém compatibilidade com reservas antigas, anteriores ao 2PC, feitas nesta empresa. */
     int limite = lerLimiteIdTrechos();
     for (int t = 0; t < limite; t++) {
-        cJSON *trechosJson = lerTrecho(t);
-        if (trechosJson == NULL) continue;
-
-        int id = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "idTrecho"));
-        char *nomeMotoristaTrecho = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "nomeMotorista"));
-        char *cidadeOrigem = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "origem"));
-        char *cidadeDestino = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "destino"));
-        int capacidade = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "capacidade"));
-        char *data = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "data"));
-        char *hora = cJSON_GetStringValue(cJSON_GetObjectItem(trechosJson, "hora"));
-        float preco = cJSON_GetNumberValue(cJSON_GetObjectItem(trechosJson, "preco"));
-        cJSON *arrayClientes = cJSON_GetObjectItem(trechosJson, "clientes");
-        int total = cJSON_GetArraySize(arrayClientes);
-
-        for (int i=0; i < total; i++){
-            char *emailClienteCarona = cJSON_GetStringValue(cJSON_GetArrayItem(arrayClientes, i));
-            if (emailCliente != NULL && emailClienteCarona != NULL &&
-            strcmp(emailCliente, emailClienteCarona) == 0) {
-                cJSON *item = cJSON_CreateObject();
-                cJSON_AddNumberToObject(item, "id", id);
-                cJSON_AddStringToObject(item, "nomeMotorista", nomeMotoristaTrecho);
-                cJSON_AddStringToObject(item, "origem", cidadeOrigem);
-                cJSON_AddStringToObject(item, "destino", cidadeDestino);
-                cJSON_AddNumberToObject(item, "capacidade", capacidade);
-                cJSON_AddStringToObject(item, "data", data);
-                cJSON_AddStringToObject(item, "hora", hora);
-                cJSON_AddNumberToObject(item, "preco", preco);
-                cJSON_AddItemToArray(arrayResposta, item);
+        cJSON *trecho = lerTrecho(t);
+        if (!trecho) continue;
+        if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(trecho, "cancelando"))) {
+            cJSON_Delete(trecho);
+            continue;
+        }
+        cJSON *clientes = cJSON_GetObjectItemCaseSensitive(trecho, "clientes");
+        int total = cJSON_IsArray(clientes) ? cJSON_GetArraySize(clientes) : 0;
+        int jaListada = 0;
+        for (int k = 0; k < cJSON_GetArraySize(arrayResposta); k++) {
+            if ((int)cJSON_GetNumberValue(cJSON_GetObjectItem(cJSON_GetArrayItem(arrayResposta, k), "id")) == t) {
+                jaListada = 1;
+                break;
             }
         }
-        cJSON_Delete(trechosJson);
+        for (int i = 0; i < total && !jaListada; i++) {
+            const char *email = cJSON_GetStringValue(cJSON_GetArrayItem(clientes, i));
+            if (!emailCliente || !email || strcmp(email, emailCliente) != 0) continue;
+            cJSON *item = cJSON_CreateObject();
+            cJSON_AddNumberToObject(item, "id", t);
+            cJSON_AddNumberToObject(item, "empresaId", consorcioEmpresaId());
+            const char *campos[] = { "nomeMotorista", "origem", "destino", "data", "hora" };
+            for (size_t k = 0; k < sizeof(campos) / sizeof(campos[0]); k++) {
+                const char *v = cJSON_GetStringValue(cJSON_GetObjectItemCaseSensitive(trecho, campos[k]));
+                cJSON_AddStringToObject(item, campos[k], v ? v : "-");
+            }
+            cJSON_AddNumberToObject(item, "capacidade", cJSON_GetNumberValue(cJSON_GetObjectItem(trecho, "capacidade")));
+            cJSON_AddNumberToObject(item, "preco", cJSON_GetNumberValue(cJSON_GetObjectItem(trecho, "preco")));
+            cJSON_AddItemToArray(arrayResposta, item);
+            jaListada = 1;
+        }
+        cJSON_Delete(trecho);
     }
 
     char *resposta = cJSON_PrintUnformatted(arrayResposta);
-    send(socketCliente, resposta, strlen(resposta), 0);
-    free(resposta);
+    if (resposta) {
+        enviarTudo(socketCliente, resposta, strlen(resposta));
+        free(resposta);
+    } else {
+        send(socketCliente, "FALHA_LISTAR_RESERVAS", 21, 0);
+    }
     cJSON_Delete(arrayResposta);
 }
 
 //função para cancelar a reserva do cliente
 void cancelar_carona(cJSON *jsonLogin, int socketCliente){
-    int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
+    int idSelecionado = (int)cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
     char *emailCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "emailCliente"));
     char *nomeCliente = cJSON_GetStringValue(cJSON_GetObjectItem(jsonLogin, "nomeCliente"));
 
-    int cancelou = cancelarReservaInterna(idSelecionado, emailCliente, nomeCliente);
+    /* O servidor de origem do cliente é o coordenador da reserva. Ele localiza a tx
+       pelo e-mail + ID global, então desfaz todos os trechos, inclusive os remotos. */
+    int resultadoConsorcio = consorcioCancelarReservaCliente(emailCliente, idSelecionado);
+    if (resultadoConsorcio == 1) {
+        log_mensagem(LOG_INFO, "Itinerario cancelado pelo cliente %s a partir do trecho global %d", emailCliente, idSelecionado);
+        send(socketCliente, "CARONA_CANCELADA", 16, 0);
+        return;
+    }
+    if (resultadoConsorcio == 2) {
+        log_mensagem(LOG_WARN, "Cancelamento do itinerario do cliente %s registrado; aguardando empresas participantes", emailCliente);
+        send(socketCliente, "CANCELAMENTO_PENDENTE", 21, 0);
+        return;
+    }
+    if (resultadoConsorcio < 0) {
+        send(socketCliente, "EMPRESA_INDISPONIVEL", 20, 0);
+        return;
+    }
 
+    /* Reserva antiga, fora do protocolo de itinerários: preserva o fluxo local. */
+    int cancelou = cancelarReservaInterna(idSelecionado, emailCliente, nomeCliente);
     if (cancelou) {
-        log_mensagem(LOG_INFO, "Reserva cancelada pelo cliente - Cliente: %s | ID Trecho: %d", emailCliente, idSelecionado);
-        //se o trecho fazia parte de um itinerário do cliente, o itinerário inteiro é cancelado
+        log_mensagem(LOG_INFO, "Reserva legada cancelada pelo cliente - Cliente: %s | ID Trecho: %d", emailCliente, idSelecionado);
         cancelarItinerariosDoCliente(idSelecionado, emailCliente);
         send(socketCliente, "CARONA_CANCELADA", 16, 0);
     } else {
@@ -1765,6 +1918,8 @@ int main(){
     encontrarID();
     //acerta o contador conforme os arquivos que existem
     recalcularContadorTrechos();
+    //remove travas transitórias deixadas por uma queda durante o cancelamento do motorista
+    recuperarTrechosEmCancelamento();
     //pasta dos itinerários; desfaz os que ficaram PENDENTES se o servidor tiver caído antes
     mkdir(DIR_ITINERARIOS, 0755);
     recuperarItinerarios();

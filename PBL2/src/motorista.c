@@ -250,9 +250,11 @@ void cancelarTrecho(int socketMotorista, Motorista *motorista){
     if (bytes > 0) {
         buffer_mensagem[bytes] = '\0';
         if (strcmp(buffer_mensagem, "TRECHO_CANCELADO") == 0) {
-            printf("Trecho cancelado com sucesso!\n");
+            printf("Trecho cancelado com sucesso! Os itinerarios que utilizavam esse trecho tambem foram cancelados.\n");
+        } else if (strcmp(buffer_mensagem, "EMPRESA_INDISPONIVEL") == 0) {
+            printf("Nao foi possivel concluir o cancelamento porque uma empresa participante esta indisponivel. O trecho foi mantido. Tente novamente.\n");
         } else {
-            printf("Trecho nao encontrado.\n");
+            printf("Trecho nao encontrado ou nao pertence a este motorista.\n");
         }
     } else {
         printf("ERRO: O SERVIDOR ESTA OFFLINE\n");

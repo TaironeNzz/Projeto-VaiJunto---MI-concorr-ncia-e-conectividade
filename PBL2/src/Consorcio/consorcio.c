@@ -59,6 +59,7 @@ static int preparedTimeoutMs = 30000; /* LEASE do voto SIM: depois disso um part
                                          Imposto pelo coordenador (vai no PREPARE). 0 = 2PC estrito (bloqueia até o coordenador voltar) */
 static int suspeitaMs       = 3000;  /* durante esse tempo um par que falhou é tratado como fora do ar */
 static int modoTeste        = 0;     /* expõe campos de auditoria na API (apenas para o teste automatizado) */
+static int testePausaDecisaoMs = 0;  /* janela controlada para testar cancelamento concorrente (somente MODO_TESTE) */
 
 typedef struct {
     int       id;
@@ -70,6 +71,8 @@ typedef struct {
 static Peer peers[MAX_PEERS];
 static int  nPeers = 0;
 static pthread_mutex_t peerMutex = PTHREAD_MUTEX_INITIALIZER;
+/* Impede que uma retransmissão COMMIT concorra com o cancelamento da mesma tx. */
+static pthread_mutex_t coordDecisaoMutex = PTHREAD_MUTEX_INITIALIZER;
 
 int consorcioPortaClientes(void) { return portaClientes; }
 int consorcioPortaRest(void)     { return portaRest; }
@@ -437,13 +440,13 @@ static int estadoDisco(const char *tx) {
     return e;
 }
 
-static void partTombstone(const char *tx) {
+static int partTombstone(const char *tx) {
     PTx t;
     memset(&t, 0, sizeof(t));
     snprintf(t.txId, sizeof(t.txId), "%s", tx);
     t.estado = EST_ABORTED;
     t.coord = txEmpresaCoord(tx);
-    partGravar(&t);
+    return partGravar(&t);
 }
 
 /* ---- operações sobre o arquivo do trecho (chamar SEM o mutex do trecho; elas travam sozinhas) ---- */
@@ -503,70 +506,101 @@ static cJSON *trechoPublico(cJSON *t, int auditoria) {
 }
 
 /* converte (confirmar=1) ou libera (confirmar=0) o bloqueio da transação no trecho. Idempotente. */
-static void efetivarHold(int idTrecho, const char *tx, int confirmar) {
+static int efetivarHold(int idTrecho, const char *tx, int confirmar) {
     pthread_mutex_t *m = obterMutexTrecho(idTrecho);
-    if (!m) return;
+    if (!m) return 0;
+    int ok = 0;
     pthread_mutex_lock(m);
     cJSON *t = lerTrechoNoLock(idTrecho);
-    if (t) {
-        int idx = bloqueioIndice(t, tx);
-        if (idx >= 0) {
-            cJSON *bl = cJSON_GetObjectItemCaseSensitive(t, "bloqueios");
-            cJSON *h = cJSON_GetArrayItem(bl, idx);
-            char pid[128] = "", nome[100] = "";
-            const char *a = jstr(h, "id"), *b = jstr(h, "nome");
-            if (a) snprintf(pid, sizeof(pid), "%s", a);
-            if (b) snprintf(nome, sizeof(nome), "%s", b);
-            cJSON_DeleteItemFromArray(bl, idx);
-            if (confirmar) {
-                cJSON_AddItemToArray(arrayDe(t, "clientes"), cJSON_CreateString(pid));
-                cJSON_AddItemToArray(arrayDe(t, "nomesClientes"), cJSON_CreateString(nome));
-                cJSON *r = cJSON_CreateObject();
-                cJSON_AddStringToObject(r, "tx", tx);
-                cJSON_AddStringToObject(r, "id", pid);
-                cJSON_AddItemToArray(arrayDe(t, "reservas"), r);
-            } else {
-                cJSON_ReplaceItemInObject(t, "capacidade", cJSON_CreateNumber(jnum(t, "capacidade", 0) + 1));
-            }
-            if (!gravarTrechoNoLock(idTrecho, t))
-                log_mensagem(LOG_ERROR, "Tx %s: falha ao gravar trecho %d ao %s o bloqueio", tx, idTrecho, confirmar ? "confirmar" : "liberar");
+    if (!t) goto fim;
+
+    cJSON *bl = cJSON_GetObjectItemCaseSensitive(t, "bloqueios");
+    cJSON *reservas = cJSON_GetObjectItemCaseSensitive(t, "reservas");
+    int idx = bloqueioIndice(t, tx);
+    if (confirmar) {
+        /* Uma repetição de COMMIT pode chegar depois de a reserva já ter sido aplicada. */
+        cJSON *r;
+        cJSON_ArrayForEach(r, reservas) {
+            const char *existente = jstr(r, "tx");
+            if (existente && strcmp(existente, tx) == 0) { ok = 1; goto fim; }
         }
-        cJSON_Delete(t);
+        if (idx < 0) goto fim; /* sem hold e sem reserva: não confirmar assento inexistente */
+
+        cJSON *h = cJSON_GetArrayItem(bl, idx);
+        char pid[128] = "", nome[100] = "";
+        const char *a = jstr(h, "id"), *b = jstr(h, "nome");
+        if (a) snprintf(pid, sizeof(pid), "%s", a);
+        if (b) snprintf(nome, sizeof(nome), "%s", b);
+        cJSON_DeleteItemFromArray(bl, idx);
+        cJSON *clientes = arrayDe(t, "clientes");
+        cJSON *nomes = arrayDe(t, "nomesClientes");
+        reservas = arrayDe(t, "reservas");
+        if (!arrayTemString(clientes, pid)) {
+            cJSON_AddItemToArray(clientes, cJSON_CreateString(pid));
+            cJSON_AddItemToArray(nomes, cJSON_CreateString(nome));
+        }
+        cJSON *rnovo = cJSON_CreateObject();
+        cJSON_AddStringToObject(rnovo, "tx", tx);
+        cJSON_AddStringToObject(rnovo, "id", pid);
+        cJSON_AddItemToArray(reservas, rnovo);
+        ok = gravarTrechoNoLock(idTrecho, t);
+    } else {
+        /* ABORT é idempotente: um hold ausente já foi liberado anteriormente. */
+        if (idx < 0) { ok = 1; goto fim; }
+        cJSON_DeleteItemFromArray(bl, idx);
+        cJSON_ReplaceItemInObject(t, "capacidade", cJSON_CreateNumber(jnum(t, "capacidade", 0) + 1));
+        ok = gravarTrechoNoLock(idTrecho, t);
     }
+
+fim:
+    if (t) cJSON_Delete(t);
     pthread_mutex_unlock(m);
+    if (!ok) log_mensagem(LOG_ERROR, "Tx %s: nao foi possivel %s o hold do trecho %d", tx,
+                          confirmar ? "confirmar" : "liberar", idTrecho);
+    return ok;
 }
 
 /* desfaz uma reserva JÁ CONFIRMADA (compensação, ver partCancelar). Idempotente. */
-static void desfazerReserva(int idTrecho, const char *tx) {
+static int desfazerReserva(int idTrecho, const char *tx) {
     pthread_mutex_t *m = obterMutexTrecho(idTrecho);
-    if (!m) return;
+    if (!m) return 0;
+    int ok = 0;
     pthread_mutex_lock(m);
     cJSON *t = lerTrechoNoLock(idTrecho);
-    if (t) {
-        cJSON *rs = cJSON_GetObjectItemCaseSensitive(t, "reservas"), *it;
-        int idx = -1, i = 0;
-        cJSON_ArrayForEach(it, rs) { const char *x = jstr(it, "tx"); if (x && strcmp(x, tx) == 0) { idx = i; break; } i++; }
-        if (idx >= 0) {
-            char pid[128] = "";
-            const char *a = jstr(cJSON_GetArrayItem(rs, idx), "id");
-            if (a) snprintf(pid, sizeof(pid), "%s", a);
-            cJSON *cl = cJSON_GetObjectItemCaseSensitive(t, "clientes"), *nm = cJSON_GetObjectItemCaseSensitive(t, "nomesClientes");
-            int k = 0;
-            cJSON_ArrayForEach(it, cl) {
-                if (cJSON_IsString(it) && strcmp(it->valuestring, pid) == 0) {
-                    cJSON_DeleteItemFromArray(cl, k);
-                    if (cJSON_IsArray(nm)) cJSON_DeleteItemFromArray(nm, k);
-                    break;
-                }
-                k++;
-            }
-            cJSON_DeleteItemFromArray(rs, idx);
-            cJSON_ReplaceItemInObject(t, "capacidade", cJSON_CreateNumber(jnum(t, "capacidade", 0) + 1));
-            if (!gravarTrechoNoLock(idTrecho, t)) log_mensagem(LOG_ERROR, "Tx %s: falha ao gravar trecho %d ao desfazer a reserva", tx, idTrecho);
-        }
-        cJSON_Delete(t);
+    if (!t) goto fim;
+
+    cJSON *rs = cJSON_GetObjectItemCaseSensitive(t, "reservas"), *it;
+    int idx = -1, i = 0;
+    cJSON_ArrayForEach(it, rs) {
+        const char *x = jstr(it, "tx");
+        if (x && strcmp(x, tx) == 0) { idx = i; break; }
+        i++;
     }
+    if (idx < 0) { ok = 1; goto fim; } /* repetição: já foi desfeita */
+
+    char pid[128] = "";
+    const char *a = jstr(cJSON_GetArrayItem(rs, idx), "id");
+    if (a) snprintf(pid, sizeof(pid), "%s", a);
+    cJSON *cl = cJSON_GetObjectItemCaseSensitive(t, "clientes");
+    cJSON *nm = cJSON_GetObjectItemCaseSensitive(t, "nomesClientes");
+    int k = 0;
+    cJSON_ArrayForEach(it, cl) {
+        if (cJSON_IsString(it) && strcmp(it->valuestring, pid) == 0) {
+            cJSON_DeleteItemFromArray(cl, k);
+            if (cJSON_IsArray(nm) && k < cJSON_GetArraySize(nm)) cJSON_DeleteItemFromArray(nm, k);
+            break;
+        }
+        k++;
+    }
+    cJSON_DeleteItemFromArray(rs, idx);
+    cJSON_ReplaceItemInObject(t, "capacidade", cJSON_CreateNumber(jnum(t, "capacidade", 0) + 1));
+    ok = gravarTrechoNoLock(idTrecho, t);
+
+fim:
+    if (t) cJSON_Delete(t);
     pthread_mutex_unlock(m);
+    if (!ok) log_mensagem(LOG_ERROR, "Tx %s: falha ao desfazer a reserva do trecho %d", tx, idTrecho);
+    return ok;
 }
 
 enum { H_OK, H_NAO_ENC, H_INCOMP, H_DUP, H_SEM, H_ESPERAR, H_MORRER, H_ERRO };
@@ -584,6 +618,7 @@ static int tentarHold(PTx *tx, int idTrecho, const char *origem, const char *des
     cJSON *t = lerTrechoNoLock(idTrecho);
     int r;
     if (!t) { r = H_NAO_ENC; goto fim; }
+    if (cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(t, "cancelando"))) { r = H_NAO_ENC; goto fim; }
     const char *o = jstr(t, "origem"), *d = jstr(t, "destino");
     if (!o || !d || strcmp(o, origem) != 0 || strcmp(d, destino) != 0) { r = H_INCOMP; goto fim; }
     if (arrayTemString(cJSON_GetObjectItemCaseSensitive(t, "clientes"), tx->passageiroId)) { r = H_DUP; goto fim; }
@@ -743,14 +778,23 @@ static int partPrepare(const char *txId, cJSON *req, cJSON **resp) {
         if (!partGravar(t)) { ok = 0; motivo = "ERRO_PERSISTENCIA"; }
     }
     if (!ok) {
-        for (int i = 0; i < t->nTrechos; i++) efetivarHold(t->trechos[i], txId, 0);
+        int liberou = 1;
+        for (int i = 0; i < t->nTrechos; i++)
+            if (!efetivarHold(t->trechos[i], txId, 0)) liberou = 0;
         t->estado = EST_ABORTED;
-        partGravar(t);                              /* tombstone: um PREPARE repetido receberá NÃO */
+        int tombstoneOk = partGravar(t);             /* tombstone: um PREPARE repetido receberá NÃO */
         *resp = respostaNao(motivo ? motivo : "ERRO");
-        partRemoverAtiva(t);
+        if (liberou && tombstoneOk) {
+            partRemoverAtiva(t);
+        } else {
+            /* Mantém o registro ativo para a retransmissão ABORT concluir a limpeza. */
+            log_mensagem(LOG_ERROR, "Tx %s: limpeza do PREPARE incompleta; aguardando retransmissao ABORT", txId);
+            cJSON_Delete(*resp);
+            *resp = respostaNao("LIMPEZA_PENDENTE");
+        }
         pthread_cond_broadcast(&txCond);
         pthread_mutex_unlock(&txMutex);
-        return 409;
+        return liberou && tombstoneOk ? 409 : 500;
     }
     log_mensagem(LOG_INFO, "Tx %s PREPARED (prio=%llu.%d, %d trecho(s))", txId, (unsigned long long)prio.ts, prio.empresa, t->nTrechos);
     *resp = respostaSim(t);
@@ -759,80 +803,184 @@ static int partPrepare(const char *txId, cJSON *req, cJSON **resp) {
     return 200;
 }
 
+/* Interrompe um PREPARE que esteja esperando por assento e espera a limpeza terminar.
+ * A função é chamada com txMutex travado; pthread_cond_wait libera o mutex para a thread PREPARE. */
+static PTx *interromperPrepareEAguardar(const char *txId) {
+    PTx *t = partBuscarAtiva(txId);
+    if (t && t->estado == EST_PREPARANDO) {
+        t->abortar = 1;
+        pthread_cond_broadcast(&txCond);
+        do {
+            pthread_cond_wait(&txCond, &txMutex);
+            t = partBuscarAtiva(txId);
+        } while (t && t->estado == EST_PREPARANDO);
+    }
+    return t;
+}
+
 /* fase 2: COMMIT. 200 ok | 404 desconhecida | 409 já abortada */
 static int partCommit(const char *txId) {
     pthread_mutex_lock(&txMutex);
     PTx *t = partBuscarAtiva(txId);
     if (!t) {
-        int e = estadoDisco(txId);
+        PTx *disco = partCarregar(txId);
+        if (!disco) { pthread_mutex_unlock(&txMutex); return 404; }
+        if (disco->estado == EST_ABORTED) { free(disco); pthread_mutex_unlock(&txMutex); return 409; }
+        if (disco->estado != EST_COMMITTED) { free(disco); pthread_mutex_unlock(&txMutex); return 404; }
+        int ok = 1;
+        for (int i = 0; i < disco->nTrechos; i++)
+            if (!efetivarHold(disco->trechos[i], txId, 1)) ok = 0;
+        free(disco);
         pthread_mutex_unlock(&txMutex);
-        return e == EST_COMMITTED ? 200 : (e == EST_ABORTED ? 409 : 404);
+        return ok ? 200 : 500;
     }
-    if (t->estado != EST_PREPARED) { pthread_mutex_unlock(&txMutex); return 409; }
-    pontoDeFalha("part_antes_commit");
-    t->estado = EST_COMMITTED;
-    partGravar(t);                                  /* decisão registrada ANTES de aplicada */
-    for (int i = 0; i < t->nTrechos; i++) efetivarHold(t->trechos[i], txId, 1);
-    log_mensagem(LOG_INFO, "Tx %s COMMITTED", txId);
-    partRemoverAtiva(t);
-    pthread_cond_broadcast(&txCond);
+    if (t->estado == EST_PREPARANDO) { pthread_mutex_unlock(&txMutex); return 409; }
+    if (t->estado == EST_ABORTED) { pthread_mutex_unlock(&txMutex); return 409; }
+    if (t->estado == EST_PREPARED) {
+        pontoDeFalha("part_antes_commit");
+        t->estado = EST_COMMITTED;
+        if (!partGravar(t)) {
+            t->estado = EST_PREPARED;
+            pthread_mutex_unlock(&txMutex);
+            return 500;
+        }
+    }
+    /* Se uma aplicação no arquivo falhar, o registro COMMITTED permanece durável e a
+       retransmissão do coordenador reaplica os trechos faltantes sem duplicar reservas. */
+    int ok = 1;
+    for (int i = 0; i < t->nTrechos; i++)
+        if (!efetivarHold(t->trechos[i], txId, 1)) ok = 0;
+    if (ok) {
+        log_mensagem(LOG_INFO, "Tx %s COMMITTED", txId);
+        partRemoverAtiva(t);
+        pthread_cond_broadcast(&txCond);
+    }
     pthread_mutex_unlock(&txMutex);
-    return 200;
+    return ok ? 200 : 500;
 }
 
-/* fase 2: ABORT. Sempre 200, exceto se já foi COMMITTED (409). Desconhecida => tombstone */
+/* fase 2: ABORT. A decisão é gravada antes da liberação dos holds; repetição conclui o trabalho pendente. */
 static int partAbort(const char *txId) {
     pthread_mutex_lock(&txMutex);
     PTx *t = partBuscarAtiva(txId);
+    if (t) t = interromperPrepareEAguardar(txId);
     if (t) {
-        if (t->estado == EST_PREPARANDO) {          /* a thread do PREPARE desfaz ao terminar */
-            t->abortar = 1;
-            pthread_cond_broadcast(&txCond);
+        if (t->estado == EST_COMMITTED) { pthread_mutex_unlock(&txMutex); return 409; }
+        if (t->estado == EST_PREPARED) {
+            t->estado = EST_ABORTED;
+            if (!partGravar(t)) {
+                t->estado = EST_PREPARED;
+                pthread_mutex_unlock(&txMutex);
+                return 500;
+            }
+        } else if (t->estado == EST_ABORTED && !partGravar(t)) {
             pthread_mutex_unlock(&txMutex);
-            return 200;
+            return 500;
         }
-        t->estado = EST_ABORTED;
-        partGravar(t);
-        for (int i = 0; i < t->nTrechos; i++) efetivarHold(t->trechos[i], txId, 0);
-        log_mensagem(LOG_INFO, "Tx %s ABORTED", txId);
-        partRemoverAtiva(t);
-        pthread_cond_broadcast(&txCond);
+        int ok = 1;
+        for (int i = 0; i < t->nTrechos; i++)
+            if (!efetivarHold(t->trechos[i], txId, 0)) ok = 0;
+        if (ok) {
+            log_mensagem(LOG_INFO, "Tx %s ABORTED", txId);
+            partRemoverAtiva(t);
+            pthread_cond_broadcast(&txCond);
+        }
         pthread_mutex_unlock(&txMutex);
-        return 200;
+        return ok ? 200 : 500;
     }
-    int e = estadoDisco(txId);
-    int status = 200;
-    if (e == EST_COMMITTED) status = 409;
-    else if (e < 0) partTombstone(txId);
+
+    PTx *disco = partCarregar(txId);
+    if (disco && disco->estado == EST_COMMITTED) {
+        free(disco);
+        pthread_mutex_unlock(&txMutex);
+        return 409;
+    }
+    if (!disco) {
+        int gravou = partTombstone(txId);
+        pthread_mutex_unlock(&txMutex);
+        return gravou ? 200 : 500;
+    }
+    if (disco->estado != EST_ABORTED) {
+        disco->estado = EST_ABORTED;
+        if (!partGravar(disco)) { free(disco); pthread_mutex_unlock(&txMutex); return 500; }
+    }
+    int ok = 1;
+    for (int i = 0; i < disco->nTrechos; i++)
+        if (!efetivarHold(disco->trechos[i], txId, 0)) ok = 0;
+    free(disco);
+    pthread_cond_broadcast(&txCond);
     pthread_mutex_unlock(&txMutex);
-    return status;
+    return ok ? 200 : 500;
 }
 
-/* COMPENSAÇÃO: desfaz a transação em qualquer estado, inclusive já COMMITTED. Só o coordenador a usa, e apenas quando
- * outro participante abortou por timeout (lease) e o COMMIT decidido não pode mais valer em todas as empresas. */
+/* COMPENSAÇÃO: desfaz a transação em qualquer estado, inclusive já COMMITTED. */
 static int partCancelar(const char *txId) {
     pthread_mutex_lock(&txMutex);
     PTx *t = partBuscarAtiva(txId);
-    pthread_mutex_unlock(&txMutex);
-    if (t) return partAbort(txId);                  /* ainda PREPARED: basta abortar */
-    pthread_mutex_lock(&txMutex);
-    PTx *c = partCarregar(txId);
-    if (!c) partTombstone(txId);
-    else {
-        if (c->estado == EST_COMMITTED) {
-            c->estado = EST_ABORTED;
-            partGravar(c);                          /* decisão registrada ANTES de desfazer (refeita na recuperação) */
-            for (int i = 0; i < c->nTrechos; i++) desfazerReserva(c->trechos[i], txId);
-            log_mensagem(LOG_WARN, "Tx %s COMPENSADA: reserva confirmada desfeita (outro participante abortou por timeout)", txId);
+    if (t) t = interromperPrepareEAguardar(txId);
+    if (t) {
+        if (t->estado == EST_PREPARED) {
+            t->estado = EST_ABORTED;
+            if (!partGravar(t)) {
+                t->estado = EST_PREPARED;
+                pthread_mutex_unlock(&txMutex);
+                return 500;
+            }
+            int ok = 1;
+            for (int i = 0; i < t->nTrechos; i++) {
+                if (!efetivarHold(t->trechos[i], txId, 0)) ok = 0;
+                if (!desfazerReserva(t->trechos[i], txId)) ok = 0;
+            }
+            if (ok) partRemoverAtiva(t);
+            pthread_cond_broadcast(&txCond);
+            pthread_mutex_unlock(&txMutex);
+            return ok ? 200 : 500;
         }
-        free(c);
+        /* EST_ABORTED em memória: terminar uma liberação que falhou anteriormente. */
+        if (t->estado == EST_ABORTED) {
+            if (!partGravar(t)) { pthread_mutex_unlock(&txMutex); return 500; }
+            int ok = 1;
+            for (int i = 0; i < t->nTrechos; i++) {
+                if (!efetivarHold(t->trechos[i], txId, 0)) ok = 0;
+                if (!desfazerReserva(t->trechos[i], txId)) ok = 0;
+            }
+            if (ok) partRemoverAtiva(t);
+            pthread_mutex_unlock(&txMutex);
+            return ok ? 200 : 500;
+        }
+        /* EST_COMMITTED: a rotina abaixo usa o registro persistido para compensar. */
     }
+
+    PTx *disco = t ? NULL : partCarregar(txId);
+    PTx *c = t ? t : disco;
+    if (!c) {
+        int gravou = partTombstone(txId);
+        pthread_cond_broadcast(&txCond);
+        pthread_mutex_unlock(&txMutex);
+        return gravou ? 200 : 500;
+    }
+    if (c->estado == EST_COMMITTED) {
+        c->estado = EST_ABORTED;
+        if (!partGravar(c)) {
+            if (disco) free(disco);
+            pthread_mutex_unlock(&txMutex);
+            return 500;
+        }
+    }
+    int ok = 1;
+    for (int i = 0; i < c->nTrechos; i++) {
+        /* Pode haver um hold ainda não convertido e/ou uma reserva já aplicada. */
+        if (!efetivarHold(c->trechos[i], txId, 0)) ok = 0;
+        if (!desfazerReserva(c->trechos[i], txId)) ok = 0;
+    }
+    if (t) {
+        if (ok) partRemoverAtiva(t);
+    } else free(disco);
     pthread_cond_broadcast(&txCond);
     pthread_mutex_unlock(&txMutex);
-    return 200;
+    return ok ? 200 : 500;
 }
 
-/* consulta do protocolo de terminação cooperativa. Se desconhecida, grava ABORTED (esta empresa NUNCA mais votará SIM) */
 static const char *partTerminacao(const char *txId) {
     pthread_mutex_lock(&txMutex);
     PTx *t = partBuscarAtiva(txId);
@@ -894,6 +1042,8 @@ static void pendAdicionar(const char *tx) {
     pthread_mutex_unlock(&pendMutex);
 }
 
+enum { MODO_ABORT = 0, MODO_COMMIT = 1, MODO_CANCELAR = 2 };
+
 typedef struct {
     int         empresa;
     Peer       *peer;
@@ -915,6 +1065,7 @@ typedef struct {
     int        nParts;
     Part       parts[MAX_PEERS + 1];
     int        commit;
+    int        modoDecisao;      /* ABORT, COMMIT ou CANCELAR (compensação já confirmada) */
     cJSON     *rota;             /* [{idGlobal, empresa, idTrecho, origem, destino}] na ordem do itinerário */
 } Ctx;
 typedef struct { Ctx *c; int i; } TArg;
@@ -984,7 +1135,6 @@ static void *thPrepare(void *a) {
     return NULL;
 }
 
-enum { MODO_ABORT = 0, MODO_COMMIT = 1, MODO_CANCELAR = 2 };
 /* envia COMMIT/ABORT/CANCELAR. Retorna 1 se a empresa confirmou (ou se não adianta insistir), 0 se deve tentar de novo,
  * 2 se o COMMIT foi recusado porque a empresa JÁ ABORTOU por timeout (conflito heurístico => compensação) */
 static int enviarDecisao(int empresa, const char *tx, int modo) {
@@ -1010,7 +1160,7 @@ static void *thDecisao(void *a) {
     TArg *ta = a;
     Part *p = &ta->c->parts[ta->i];
     if (!p->ack) {
-        int r = enviarDecisao(p->empresa, ta->c->txId, ta->c->commit ? MODO_COMMIT : MODO_ABORT);
+        int r = enviarDecisao(p->empresa, ta->c->txId, ta->c->modoDecisao);
         if (r == 2) { p->ack = 1; p->conflito = 1; } else p->ack = r;
     }
     return NULL;
@@ -1068,7 +1218,12 @@ static void compensar(const char *tx, cJSON *rec, const int *abortaram, int n) {
         for (int i = 0; i < n; i++) if (abortaram[i] == emp) ja = 1;
         cJSON_ReplaceItemInObject(p, "ack", cJSON_CreateBool(ja));
     }
-    coordGravar(tx, rec);
+    if (!coordGravar(tx, rec)) {
+        /* Nunca propagar compensação que não foi registrada duravelmente.
+         * O registro COMMIT anterior permanece recuperável e poderá ser reavaliado. */
+        log_mensagem(LOG_ERROR, "Tx %s: falha ao persistir ABORT compensatorio; nenhuma compensacao foi propagada", tx);
+        return;
+    }
     cancelarItinerarioCompensado((int)jnum(rec, "idItinerario", -1), "participante abortou por timeout; reservas desfeitas");
     pendAdicionar(tx);
 }
@@ -1192,6 +1347,10 @@ int consorcioConfirmarItinerario(cJSON *req, int *idItinOut, char *txOut, size_t
     /* 3. FASE 1: PREPARE em paralelo a todas as empresas envolvidas */
     long long tIniPrepare = nowMs();
     rodarThreads(c, thPrepare);
+    if (modoTeste && testePausaDecisaoMs > 0) {
+        log_mensagem(LOG_INFO, "Tx %s: pausa de teste de %dms antes da decisao", c->txId, testePausaDecisaoMs);
+        usleep((useconds_t)testePausaDecisaoMs * 1000U);
+    }
     int todosSim = 1, leaseExpirou = 0;
     for (int i = 0; i < c->nParts; i++) if (c->parts[i].voto != 1) todosSim = 0;
     /* guarda do lease: os participantes podem abortar sozinhos a partir de 'preparedTimeoutMs' depois do PREPARE;
@@ -1202,27 +1361,80 @@ int consorcioConfirmarItinerario(cJSON *req, int *idItinOut, char *txOut, size_t
     }
     pontoDeFalha("coord_antes_decisao");
 
-    /* 4. decisão: gravada com fsync ANTES de ser enviada. Se não der para gravar COMMIT, decide ABORT. */
-    c->commit = todosSim;
-    for (int i = 0; i < c->nParts; i++) c->parts[i].ack = (c->parts[i].voto == -2);  /* nunca contatadas: nada a desfazer */
-    rec = coordMontarRegistro(c, c->commit ? "COMMIT" : "ABORT", 0);
-    if (!coordGravar(c->txId, rec)) {
-        if (c->commit) {
-            c->commit = 0;
-            cJSON_Delete(rec);
-            rec = coordMontarRegistro(c, "ABORT", 0);
-            coordGravar(c->txId, rec);
+    /* 4. A decisão e o cancelamento disputam o MESMO mutex.
+     * O motorista pode ter pedido cancelamento enquanto algum participante ainda estava em PREPARE.
+     * Nesse caso o coordenador já gravou ABORT no disco. Nunca sobrescrevemos esse ABORT com COMMIT. */
+    pthread_mutex_lock(&coordDecisaoMutex);
+    rec = coordLer(c->txId);
+    const char *estadoPersistido = rec ? jstr(rec, "estado") : NULL;
+    if (!rec || !estadoPersistido ||
+        (strcmp(estadoPersistido, "PREPARANDO") != 0 &&
+         strcmp(estadoPersistido, "COMMIT") != 0 && strcmp(estadoPersistido, "ABORT") != 0)) {
+        cJSON_Delete(rec);
+        pthread_mutex_unlock(&coordDecisaoMutex);
+        log_mensagem(LOG_ERROR, "Tx %s: registro do coordenador ausente/invalido; decisao bloqueada por seguranca", c->txId);
+        cJSON_Delete(c->rota);
+        free(c);
+        return ITIN_ERRO;
+    }
+
+    if (estadoPersistido && strcmp(estadoPersistido, "PREPARANDO") != 0) {
+        /* Uma decisão concorrente já foi registrada (por exemplo, cancelamento do motorista). */
+        c->commit = strcmp(estadoPersistido, "COMMIT") == 0;
+        int compensando = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(rec, "compensando"));
+        c->modoDecisao = c->commit ? MODO_COMMIT : (compensando ? MODO_CANCELAR : MODO_ABORT);
+        cJSON *ps = cJSON_GetObjectItemCaseSensitive(rec, "participantes"), *pj;
+        for (int i = 0; i < c->nParts; i++) {
+            cJSON_ArrayForEach(pj, ps) {
+                if ((int)jnum(pj, "empresa", 0) == c->parts[i].empresa) {
+                    c->parts[i].ack = cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(pj, "ack"));
+                    break;
+                }
+            }
+        }
+    } else {
+        /* Ainda não há decisão concorrente: esta thread é a primeira a decidir. */
+        c->commit = todosSim;
+        c->modoDecisao = c->commit ? MODO_COMMIT : MODO_ABORT;
+        for (int i = 0; i < c->nParts; i++)
+            c->parts[i].ack = (c->parts[i].voto == -2); /* pares não contatados não possuem bloqueio */
+        cJSON_Delete(rec);
+        rec = coordMontarRegistro(c, c->commit ? "COMMIT" : "ABORT", 0);
+        if (!coordGravar(c->txId, rec)) {
+            if (c->commit) {
+                c->commit = 0;
+                c->modoDecisao = MODO_ABORT;
+                cJSON_Delete(rec);
+                rec = coordMontarRegistro(c, "ABORT", 0);
+                if (!coordGravar(c->txId, rec)) {
+                    cJSON_Delete(rec);
+                    pthread_mutex_unlock(&coordDecisaoMutex);
+                    log_mensagem(LOG_ERROR, "Tx %s: falha ao persistir COMMIT e ABORT; participantes resolverao por timeout/recuperacao", c->txId);
+                    cJSON_Delete(c->rota);
+                    free(c);
+                    return ITIN_ERRO;
+                }
+            } else {
+                cJSON_Delete(rec);
+                pthread_mutex_unlock(&coordDecisaoMutex);
+                log_mensagem(LOG_ERROR, "Tx %s: falha ao persistir decisao ABORT", c->txId);
+                cJSON_Delete(c->rota);
+                free(c);
+                return ITIN_ERRO;
+            }
         }
     }
-    log_mensagem(LOG_INFO, "Tx %s decisao=%s (prio=%llu.%d, %d empresa(s))", c->txId, c->commit ? "COMMIT" : "ABORT",
-                 (unsigned long long)c->prio.ts, c->prio.empresa, c->nParts);
+
+    if (rec == NULL) rec = coordLer(c->txId);
+    if (c->commit && rec) finalizarItinerario(c->txId, rec);
+    log_mensagem(LOG_INFO, "Tx %s decisao=%s (prio=%llu.%d, %d empresa(s))", c->txId,
+                 c->commit ? "COMMIT" : "ABORT", (unsigned long long)c->prio.ts, c->prio.empresa, c->nParts);
     pontoDeFalha("coord_apos_decisao");
 
-    if (c->commit) finalizarItinerario(c->txId, rec);
-
-    /* 5. FASE 2: envia a decisão; quem não responder é retransmitido pela thread de manutenção */
+    /* 5. FASE 2: continuamos sob o mesmo mutex usado por cancelar/retransmitir.
+     * Assim, uma retransmissão COMMIT não pode ultrapassar um ABORT mais recente. */
     rodarThreads(c, thDecisao);
-    int todosAck = 1, conflitos[MAX_PEERS + 1], nConf = 0, compensado = 0;
+    int todosAck = 1, conflitos[MAX_PEERS + 1], nConf = 0, compensado = (c->modoDecisao == MODO_CANCELAR);
     for (int i = 0; i < c->nParts; i++) {
         if (!c->parts[i].ack) todosAck = 0;
         if (c->parts[i].conflito) conflitos[nConf++] = c->parts[i].empresa;
@@ -1231,17 +1443,23 @@ int consorcioConfirmarItinerario(cJSON *req, int *idItinOut, char *txOut, size_t
     if (rec2 && c->commit && nConf > 0) {             /* COMMIT recusado por quem abortou por timeout */
         compensar(c->txId, rec2, conflitos, nConf);
         cJSON_Delete(rec2);
-        rec2 = NULL; todosAck = 1; compensado = 1;    /* a retransmissao do CANCELAR e feita pela thread de manutencao */
+        rec2 = NULL; todosAck = 1; compensado = 1;    /* CANCELAR será retransmitido pela manutenção */
     }
     if (rec2) {
         cJSON *pp = cJSON_GetObjectItemCaseSensitive(rec2, "participantes");
-        for (int i = 0; i < c->nParts; i++)
-            cJSON_ReplaceItemInObject(cJSON_GetArrayItem(pp, i), "ack", cJSON_CreateBool(c->parts[i].ack));
+        for (int i = 0; i < c->nParts; i++) {
+            cJSON *pPersistido = NULL, *p;
+            cJSON_ArrayForEach(p, pp)
+                if ((int)jnum(p, "empresa", 0) == c->parts[i].empresa) { pPersistido = p; break; }
+            if (pPersistido)
+                cJSON_ReplaceItemInObject(pPersistido, "ack", cJSON_CreateBool(c->parts[i].ack));
+        }
         if (todosAck) cJSON_ReplaceItemInObject(rec2, "finalizada", cJSON_CreateTrue());
         coordGravar(c->txId, rec2);
         cJSON_Delete(rec2);
     }
     if (!todosAck) pendAdicionar(c->txId);
+    pthread_mutex_unlock(&coordDecisaoMutex);
 
     /* 6. resultado para o passageiro */
     if (c->commit && !compensado) rc = ITIN_OK;
@@ -1316,7 +1534,8 @@ cJSON *listarTrechosConsorcio(const char *data) {
     for (int i = 0; i < limite; i++) {
         cJSON *t = lerTrecho(i);
         if (!t) continue;
-        if ((int)jnum(t, "capacidade", 0) > 0 && dataConfere(data, jstr(t, "data"))) {
+        if (!cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(t, "cancelando")) &&
+            (int)jnum(t, "capacidade", 0) > 0 && dataConfere(data, jstr(t, "data"))) {
             cJSON *pub = trechoPublico(t, 0);
             cJSON_AddItemToArray(saida, itemGateway(pub, empresaId));
             cJSON_Delete(pub);
@@ -1354,8 +1573,14 @@ static void recuperarParticipante(void) {
             continue;
         }
         for (int i = 0; i < t->nTrechos; i++) {                       /* refaz a decisão gravada */
-            efetivarHold(t->trechos[i], tx, t->estado == EST_COMMITTED);
-            if (t->estado == EST_ABORTED) desfazerReserva(t->trechos[i], tx);   /* compensação interrompida por queda */
+            if (t->estado == EST_COMMITTED) {
+                if (!efetivarHold(t->trechos[i], tx, 1))
+                    log_mensagem(LOG_ERROR, "Tx %s: recuperacao nao conseguiu aplicar COMMIT no trecho %d", tx, t->trechos[i]);
+            } else if (t->estado == EST_ABORTED) {
+                /* ABORT pode ser uma compensação após COMMIT; remove hold e reserva se ainda existirem. */
+                if (!efetivarHold(t->trechos[i], tx, 0) || !desfazerReserva(t->trechos[i], tx))
+                    log_mensagem(LOG_ERROR, "Tx %s: recuperacao nao conseguiu aplicar ABORT no trecho %d", tx, t->trechos[i]);
+            }
         }
         refeitos++;
         free(t);
@@ -1378,7 +1603,13 @@ static void recuperarParticipante(void) {
         for (int i = 0; i < nt; i++) {
             int est = estadoDisco(txs[i]);
             if (est < 0 && txIdValido(txs[i])) partTombstone(txs[i]);
-            efetivarHold(id, txs[i], est == EST_COMMITTED);
+            if (est == EST_COMMITTED) {
+                if (!efetivarHold(id, txs[i], 1))
+                    log_mensagem(LOG_ERROR, "Tx %s: nao foi possivel refazer hold orphan no trecho %d", txs[i], id);
+            } else {
+                if (!efetivarHold(id, txs[i], 0))
+                    log_mensagem(LOG_ERROR, "Tx %s: nao foi possivel liberar hold orfao no trecho %d", txs[i], id);
+            }
             orfaos++;
         }
     }
@@ -1421,8 +1652,8 @@ static void recuperarCoordenador(void) {
     log_mensagem(LOG_INFO, "Recuperacao (coordenador): %d transacao(oes) sem decisao abortada(s), %d decisao(oes) a retransmitir", abortadas, retransmitir);
 }
 
-/* retransmite a decisão aos participantes sem ack. Retorna 1 quando a transação foi finalizada */
-static int coordRetentar(const char *tx) {
+/* retransmite a decisão aos participantes sem ack. Chamar com coordDecisaoMutex travado. */
+static int coordRetentarInterno(const char *tx) {
     cJSON *rec = coordLer(tx);
     if (!rec) return 1;
     const char *est = jstr(rec, "estado");
@@ -1454,6 +1685,210 @@ static int coordRetentar(const char *tx) {
     if (mudou) coordGravar(tx, rec);
     cJSON_Delete(rec);
     return todos;
+}
+
+/* Caminho normal de retransmissão (thread de manutenção). */
+static int coordRetentar(const char *tx) {
+    pthread_mutex_lock(&coordDecisaoMutex);
+    int finalizado = coordRetentarInterno(tx);
+    pthread_mutex_unlock(&coordDecisaoMutex);
+    return finalizado;
+}
+
+/*
+ * Cancela uma transação já confirmada usando o mesmo mecanismo durável de compensação
+ * usado quando um participante aborta após um COMMIT. A decisão ABORT/compensando é
+ * persistida antes de qualquer mensagem; participantes indisponíveis ficam na fila
+ * de retransmissão e recebem CANCELAR quando voltarem.
+ */
+static int coordenadorCancelarTx(const char *tx, const char *motivo) {
+    if (!txIdValido(tx) || txEmpresaCoord(tx) != empresaId) return 0;
+
+    pthread_mutex_lock(&coordDecisaoMutex);
+    cJSON *rec = coordLer(tx);
+    if (!rec) {
+        pthread_mutex_unlock(&coordDecisaoMutex);
+        return 0;
+    }
+
+    const char *estado = jstr(rec, "estado");
+    int precisaGravar = 0;
+
+    if (estado && strcmp(estado, "COMMIT") == 0) {
+        /* COMMIT já foi decidido: a remoção exige compensação explícita em cada participante. */
+        cJSON_ReplaceItemInObject(rec, "estado", cJSON_CreateString("ABORT"));
+        cJSON_DeleteItemFromObjectCaseSensitive(rec, "compensando");
+        cJSON_AddBoolToObject(rec, "compensando", 1);
+        precisaGravar = 1;
+    } else if (estado && strcmp(estado, "PREPARANDO") == 0) {
+        /* PREPARE em andamento: ABORT durável; pode chegar antes ou depois do PREPARE em cada peer. */
+        cJSON_ReplaceItemInObject(rec, "estado", cJSON_CreateString("ABORT"));
+        cJSON_DeleteItemFromObjectCaseSensitive(rec, "compensando");
+        precisaGravar = 1;
+    } else if (estado && strcmp(estado, "ABORT") == 0) {
+        /* Repetição idempotente: preserva se é ABORT simples ou compensação de COMMIT. */
+        /* coordRetentarInterno seleciona MODO_CANCELAR quando compensando=1. */
+    } else {
+        cJSON_Delete(rec);
+        pthread_mutex_unlock(&coordDecisaoMutex);
+        return 0;
+    }
+
+    if (precisaGravar) {
+        cJSON_ReplaceItemInObject(rec, "finalizada", cJSON_CreateFalse());
+        cJSON *p;
+        cJSON_ArrayForEach(p, cJSON_GetObjectItemCaseSensitive(rec, "participantes"))
+            cJSON_ReplaceItemInObject(p, "ack", cJSON_CreateFalse());
+        if (!coordGravar(tx, rec)) {
+            cJSON_Delete(rec);
+            pthread_mutex_unlock(&coordDecisaoMutex);
+            log_mensagem(LOG_ERROR, "Tx %s: nao foi possivel persistir a decisao de cancelamento", tx);
+            return 0;
+        }
+    }
+
+    int idItinerario = (int)jnum(rec, "idItinerario", -1);
+    cJSON_Delete(rec);
+
+    /* A lista de itinerários nunca deve continuar exibindo uma transação cancelada. */
+    cancelarItinerarioCompensado(idItinerario, motivo ? motivo : "cancelado por solicitacao do participante");
+    pendAdicionar(tx);
+    int finalizado = coordRetentarInterno(tx);
+    pthread_mutex_unlock(&coordDecisaoMutex);
+    return finalizado ? 1 : 2;
+}
+
+/* Encaminha o pedido ao coordenador codificado no identificador da transação. */
+int consorcioCancelarItinerarioTx(const char *tx, const char *motivo) {
+    if (!txIdValido(tx)) return 0;
+    int coord = txEmpresaCoord(tx);
+    if (coord <= 0) return 0;
+    if (coord == empresaId) return coordenadorCancelarTx(tx, motivo);
+
+    Peer *p = buscarPeer(coord);
+    if (!p || peerSuspeito(p)) return 0;
+    char caminho[160], *resposta = NULL;
+    int status = 0;
+    snprintf(caminho, sizeof(caminho), "/api/v1/itinerarios/%s/cancelar", tx);
+    cJSON *j = cJSON_CreateObject();
+    cJSON_AddStringToObject(j, "motivo", motivo ? motivo : "cancelado por solicitacao do participante");
+    char *texto = cJSON_PrintUnformatted(j);
+    cJSON_Delete(j);
+    if (!texto) return 0;
+    int rc = httpChamar(p, "POST", caminho, texto, decisaoTimeoutMs * (MAX_PEERS + 2), &status, &resposta);
+    free(texto);
+    free(resposta);
+    if (rc != 0) return 0;
+    if (status == 200) return 1;
+    if (status == 202) return 2; /* decisao gravada; retransmissao pendente */
+    return 0;
+}
+
+/*
+ * Monta a lista de reservas a partir dos registros duráveis do COORDENADOR.
+ * Assim, a empresa de origem do cliente enxerga também os trechos mantidos pelos pares,
+ * sem precisar expor e-mails dos passageiros nos servidores participantes.
+ */
+static cJSON *montarReservaCliente(cJSON *rec, cJSON *rota) {
+    int empresa = (int)jnum(rota, "empresa", 0);
+    int idLocal = (int)jnum(rota, "idTrecho", -1);
+    int idGlobal = (int)jnum(rota, "idGlobal", empresa == empresaId ? idLocal : empresa * ID_STRIDE + idLocal);
+    if (empresa <= 0 || idLocal < 0 || idGlobal < 0) return NULL;
+
+    cJSON *detalhe = NULL, *p, *d;
+    cJSON_ArrayForEach(p, cJSON_GetObjectItemCaseSensitive(rec, "participantes")) {
+        if ((int)jnum(p, "empresa", 0) != empresa) continue;
+        cJSON_ArrayForEach(d, cJSON_GetObjectItemCaseSensitive(p, "detalhes")) {
+            if ((int)jnum(d, "idTrecho", -1) == idLocal) { detalhe = d; break; }
+        }
+        break;
+    }
+
+    cJSON *item = cJSON_CreateObject();
+    cJSON_AddNumberToObject(item, "id", idGlobal);
+    cJSON_AddNumberToObject(item, "empresaId", empresa);
+    const char *origem = jstr(rota, "origem");
+    const char *destino = jstr(rota, "destino");
+    const char *campos[] = { "nomeMotorista", "data", "hora" };
+    for (size_t i = 0; i < sizeof(campos) / sizeof(campos[0]); i++) {
+        const char *v = detalhe ? jstr(detalhe, campos[i]) : NULL;
+        cJSON_AddStringToObject(item, campos[i], v ? v : "-");
+    }
+    cJSON_AddStringToObject(item, "origem", origem ? origem : "-");
+    cJSON_AddStringToObject(item, "destino", destino ? destino : "-");
+    cJSON_AddNumberToObject(item, "capacidade", detalhe ? jnum(detalhe, "capacidade", 0) : 0);
+    cJSON_AddNumberToObject(item, "preco", detalhe ? jnum(detalhe, "preco", 0) : 0);
+    return item;
+}
+
+cJSON *consorcioListarReservasCliente(const char *emailCliente) {
+    cJSON *saida = cJSON_CreateArray();
+    if (!emailCliente || !*emailCliente) return saida;
+    DIR *dir = opendir(DIR_TX);
+    if (!dir) return saida;
+
+    struct dirent *entrada;
+    while ((entrada = readdir(dir)) != NULL) {
+        size_t n = strlen(entrada->d_name);
+        if (strncmp(entrada->d_name, "coord_", 6) != 0 || n < 12 || strcmp(entrada->d_name + n - 5, ".json") != 0) continue;
+        char tx[80];
+        snprintf(tx, sizeof(tx), "%.*s", (int)(n - 11), entrada->d_name + 6);
+        if (!txIdValido(tx)) continue;
+        cJSON *rec = coordLer(tx);
+        if (!rec) continue;
+        const char *estado = jstr(rec, "estado");
+        const char *email = jstr(rec, "emailCliente");
+        if (estado && strcmp(estado, "COMMIT") == 0 && email && strcmp(email, emailCliente) == 0 &&
+            !cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(rec, "compensando"))) {
+            cJSON *rota = cJSON_GetObjectItemCaseSensitive(rec, "rota"), *r;
+            cJSON_ArrayForEach(r, rota) {
+                cJSON *item = montarReservaCliente(rec, r);
+                if (item) cJSON_AddItemToArray(saida, item);
+            }
+        }
+        cJSON_Delete(rec);
+    }
+    closedir(dir);
+    return saida;
+}
+
+int consorcioCancelarReservaCliente(const char *emailCliente, int idTrechoGlobal) {
+    if (!emailCliente || !*emailCliente || idTrechoGlobal < 0) return 0;
+    DIR *dir = opendir(DIR_TX);
+    if (!dir) return 0;
+
+    int encontrou = 0, pendente = 0, falhou = 0;
+    struct dirent *entrada;
+    while ((entrada = readdir(dir)) != NULL) {
+        size_t n = strlen(entrada->d_name);
+        if (strncmp(entrada->d_name, "coord_", 6) != 0 || n < 12 || strcmp(entrada->d_name + n - 5, ".json") != 0) continue;
+        char tx[80];
+        snprintf(tx, sizeof(tx), "%.*s", (int)(n - 11), entrada->d_name + 6);
+        if (!txIdValido(tx)) continue;
+        cJSON *rec = coordLer(tx);
+        if (!rec) continue;
+        const char *estado = jstr(rec, "estado");
+        const char *email = jstr(rec, "emailCliente");
+        int corresponde = 0;
+        int commitAtivo = estado && strcmp(estado, "COMMIT") == 0;
+        int cancelamentoPendente = estado && strcmp(estado, "ABORT") == 0 &&
+            cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(rec, "compensando"));
+        if ((commitAtivo || cancelamentoPendente) && email && strcmp(email, emailCliente) == 0) {
+            cJSON *rota = cJSON_GetObjectItemCaseSensitive(rec, "rota"), *r;
+            cJSON_ArrayForEach(r, rota)
+                if ((int)jnum(r, "idGlobal", -1) == idTrechoGlobal) { corresponde = 1; break; }
+        }
+        cJSON_Delete(rec);
+        if (!corresponde) continue;
+        encontrou = 1;
+        int rc = coordenadorCancelarTx(tx, "cliente cancelou a reserva");
+        if (rc == 2) pendente = 1;
+        else if (rc == 0) falhou = 1;
+    }
+    closedir(dir);
+    if (!encontrou) return 0;
+    if (falhou) return -1;
+    return pendente ? 2 : 1;
 }
 
 /* decisão do coordenador consultada por participante em dúvida: 1 COMMIT, 0 ABORT, -1 pendente, -2 sem resposta */
@@ -1512,10 +1947,77 @@ static int resolverEmDuvida(const char *tx, int coord, int *parts, int nParts) {
     return 0;
 }
 
+/*
+ * Migração/reparo de dados antigos: versões anteriores removiam o passageiro de
+ * "clientes" mas deixavam {tx,id} em "reservas". Cada tx órfã é cancelada no seu
+ * coordenador (compensação de TODO o itinerário); só depois de a decisão ser aceita
+ * removemos eventual registro local que já não tenha um participante recuperável.
+ */
+static void reconciliarReservasOrfas(void) {
+    int limite = lerLimiteIdTrechos();
+    for (int idTrecho = 0; idTrecho < limite; idTrecho++) {
+        pthread_mutex_t *m = obterMutexTrecho(idTrecho);
+        if (!m) continue;
+        char txs[64][80];
+        int n = 0;
+        pthread_mutex_lock(m);
+        cJSON *t = lerTrechoNoLock(idTrecho);
+        if (t) {
+            cJSON *clientes = cJSON_GetObjectItemCaseSensitive(t, "clientes");
+            cJSON *reservas = cJSON_GetObjectItemCaseSensitive(t, "reservas");
+            cJSON *r;
+            cJSON_ArrayForEach(r, reservas) {
+                const char *tx = jstr(r, "tx"), *pid = jstr(r, "id");
+                if (!tx || !txIdValido(tx) || !pid || arrayTemString(clientes, pid)) continue;
+                int repetida = 0;
+                for (int i = 0; i < n; i++) if (strcmp(txs[i], tx) == 0) repetida = 1;
+                if (!repetida && n < 64) {
+                    snprintf(txs[n], sizeof(txs[n]), "%s", tx);
+                    n++;
+                }
+            }
+            cJSON_Delete(t);
+        }
+        pthread_mutex_unlock(m);
+
+        for (int i = 0; i < n; i++) {
+            int rc = consorcioCancelarItinerarioTx(txs[i],
+                "reconciliacao: reserva sem passageiro correspondente no trecho");
+            if (rc == 0) continue; /* coordenador indisponível: tenta novamente no próximo ciclo */
+
+            pthread_mutex_lock(m);
+            t = lerTrechoNoLock(idTrecho);
+            if (t) {
+                cJSON *clientes = cJSON_GetObjectItemCaseSensitive(t, "clientes");
+                cJSON *reservas = cJSON_GetObjectItemCaseSensitive(t, "reservas");
+                cJSON *bloqueios = cJSON_GetObjectItemCaseSensitive(t, "bloqueios");
+                for (int k = cJSON_IsArray(reservas) ? cJSON_GetArraySize(reservas) - 1 : -1; k >= 0; k--) {
+                    cJSON *r = cJSON_GetArrayItem(reservas, k);
+                    const char *tx = jstr(r, "tx"), *pid = jstr(r, "id");
+                    if (tx && strcmp(tx, txs[i]) == 0 && pid && !arrayTemString(clientes, pid))
+                        cJSON_DeleteItemFromArray(reservas, k);
+                }
+                int total = (int)jnum(t, "capacidadeTotal", -1);
+                int ocupados = (cJSON_IsArray(clientes) ? cJSON_GetArraySize(clientes) : 0) +
+                               (cJSON_IsArray(bloqueios) ? cJSON_GetArraySize(bloqueios) : 0);
+                if (total >= ocupados)
+                    cJSON_ReplaceItemInObject(t, "capacidade", cJSON_CreateNumber(total - ocupados));
+                gravarTrechoNoLock(idTrecho, t);
+                cJSON_Delete(t);
+            }
+            pthread_mutex_unlock(m);
+            log_mensagem(LOG_WARN, "Trecho %d: reserva órfã da tx %s reconciliada por cancelamento do itinerario",
+                         idTrecho, txs[i]);
+        }
+    }
+}
+
 static void *rotinaManutencao(void *arg) {
     (void)arg;
+    int ciclos = 0;
     for (;;) {
         sleep(1);
+        if (++ciclos >= 5) { ciclos = 0; reconciliarReservasOrfas(); }
         /* a) participantes em dúvida */
         typedef struct { char tx[80]; int coord; int parts[MAX_PEERS + 1]; int n; long long idade; int lease; } Duvida;
         Duvida *lista = malloc(sizeof(Duvida) * 64);
@@ -1574,11 +2076,15 @@ int consorcioIniciar(void) {
     preparedTimeoutMs = envInt("PREPARED_TIMEOUT_MS", preparedTimeoutMs);
     suspeitaMs       = envInt("SUSPEITA_MS", suspeitaMs);
     modoTeste        = envInt("MODO_TESTE", 0);
+    testePausaDecisaoMs = modoTeste ? envInt("TEST_PAUSE_BEFORE_DECISION_MS", 0) : 0;
+    if (testePausaDecisaoMs < 0 || testePausaDecisaoMs > 10000) testePausaDecisaoMs = 0;
     mkdir(DIR_TX, 0755);
     lamportIniciar("ArquivoID/lamport.txt");
     carregarPeers();
     log_mensagem(LOG_INFO, "Empresa %d | %d par(es) no consorcio | wait-die=%dms prepare-timeout=%dms in-doubt=%dms lease=%dms%s",
                  empresaId, nPeers, esperaConflitoMs, prepareTimeoutMs, inDoubtMs, preparedTimeoutMs, modoTeste ? " | MODO_TESTE" : "");
+    if (testePausaDecisaoMs > 0)
+        log_mensagem(LOG_WARN, "MODO_TESTE: janela artificial antes da decisao = %dms", testePausaDecisaoMs);
     for (int i = 0; i < nPeers; i++) log_mensagem(LOG_INFO, "  par: empresa %d em %s:%d", peers[i].id, peers[i].host, peers[i].port);
     recuperarParticipante();
     recuperarCoordenador();
@@ -1766,11 +2272,31 @@ enum MHD_Result consorcioHandlerRest(void *cls, struct MHD_Connection *conn, con
             if (!t) continue;
             const char *o = jstr(t, "origem"), *d = jstr(t, "destino");
             int ok = (!fo || (o && !strcasecmp(o, fo))) && (!fd || (d && !strcasecmp(d, fd))) && dataConfere(fdata, jstr(t, "data"))
+                     && !cJSON_IsTrue(cJSON_GetObjectItemCaseSensitive(t, "cancelando"))
                      && (!(disp && !strcmp(disp, "true")) || jnum(t, "capacidade", 0) > 0);
             if (ok) cJSON_AddItemToArray(arr, trechoPublico(t, aud != NULL));
             cJSON_Delete(t);
         }
         return responder(conn, 200, arr);
+    }
+    if (strcmp(method, "POST") == 0 && strncmp(url, "/api/v1/itinerarios/", 20) == 0) {
+        const char *resto = url + 20;
+        const char *barra = strchr(resto, '/');
+        if (!barra || strcmp(barra + 1, "cancelar") != 0 || barra == resto || (size_t)(barra - resto) >= 80)
+            return responder(conn, 400, jsonErro("ROTA_INVALIDA", "Use /api/v1/itinerarios/{tx}/cancelar."));
+        char tx[80];
+        memcpy(tx, resto, (size_t)(barra - resto));
+        tx[barra - resto] = '\0';
+        if (!txIdValido(tx) || txEmpresaCoord(tx) != empresaId)
+            return responder(conn, 404, jsonErro("NAO_E_COORDENADOR", "Esta empresa nao coordena o itinerario."));
+        cJSON *body = req->body ? cJSON_Parse(req->body) : NULL;
+        const char *motivo = body ? jstr(body, "motivo") : NULL;
+        int rc = coordenadorCancelarTx(tx, motivo ? motivo : "trecho cancelado pelo motorista participante");
+        cJSON_Delete(body);
+        cJSON *o = cJSON_CreateObject();
+        cJSON_AddStringToObject(o, "txId", tx);
+        cJSON_AddStringToObject(o, "estado", rc == 1 || rc == 2 ? "CANCELADO" : "NAO_CANCELADO");
+        return responder(conn, rc == 1 ? 200 : rc == 2 ? 202 : 404, o);
     }
     if (get && strncmp(url, "/api/v1/trechos/", 16) == 0) {
         char *fim = NULL;

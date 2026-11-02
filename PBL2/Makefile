@@ -9,10 +9,9 @@
 #   DockerFile/     DockerFile.Servidor, DockerFile.Cliente, DockerFile.Motorista
 #   simulador/      simulador.py, vaijunto.py
 #   testes/         teste_consorcio.py
-#   relatorio/      relatorio.tex, refs.bib, sbc-template.sty, sbc.bst
 #
 # Uso rapido:
-#   make deps          instala as dependencias (gcc, make, libmicrohttpd, GTK3, python3)
+#   make deps          instala as dependencias (gcc, make, libmicrohttpd, GTK3, Python, curl e TeX Live)
 #   make               compila servidor, cliente, motorista (e interface, se houver GTK3)
 #
 # Consorcio SEM Docker (3 empresas como processos locais, cada uma com disco proprio em run/empresaN):
@@ -31,7 +30,7 @@
 #   make simulador     carga de passageiros no cluster local (cluster-up antes; MODO_TESTE=1 para --auditar)
 #   make teste         teste automatizado (carga + injecao de falhas + auditoria), modo local
 #   make teste-docker  o mesmo, nos conteineres do docker-compose
-#   make relatorio     compila o relatorio (pdflatex + bibtex)
+#   make relatorio     compila o relatório (pdflatex em duas passagens)
 #   make clean | make distclean
 # ============================================================================
 
@@ -83,7 +82,7 @@ THREADS    ?= 24
 PY         ?= python3
 SIM_EMPRESAS = 1=127.0.0.1:17001:18001,2=127.0.0.1:17002:18002,3=127.0.0.1:17003:18003
 
-.PHONY: all deps dirs clean distclean help docker-build docker-up docker-down docker-kill docker-start \
+.PHONY: all deps dependencias dirs clean distclean help docker-build docker-up docker-down docker-kill docker-start \
         run-servidor run-cliente run-motorista run-interface run-empresa1 run-empresa2 run-empresa3 \
         cluster-up cluster-down cluster-status cluster-logs cluster-kill cluster-start \
         simulador teste teste-docker relatorio
@@ -109,19 +108,21 @@ $(BIN_DIR)/interface: $(INTERFACE_SRC) $(CJSON_SRC) $(HEADERS) | $(BIN_DIR)
 	$(CC) $(CFLAGS) $(INCLUDES) $(filter %.c,$^) -o $@ $$(pkg-config --cflags --libs gtk+-3.0) -lm
 
 # Instala as dependencias conforme o gerenciador de pacotes da distribuicao
+dependencias: deps
+
 deps:
 	@if command -v apt-get >/dev/null 2>&1; then \
 		echo ">> Debian/Ubuntu"; \
 		sudo apt-get update && \
-		sudo apt-get install -y build-essential pkg-config libmicrohttpd-dev libgtk-3-dev python3 curl; \
+		sudo apt-get install -y build-essential pkg-config libmicrohttpd-dev libgtk-3-dev python3 curl texlive-latex-extra texlive-pictures texlive-fonts-recommended; \
 	elif command -v dnf >/dev/null 2>&1; then \
 		echo ">> Fedora/RHEL"; \
-		sudo dnf install -y gcc make pkgconf-pkg-config libmicrohttpd-devel gtk3-devel python3 curl; \
+		sudo dnf install -y gcc make pkgconf-pkg-config libmicrohttpd-devel gtk3-devel python3 curl texlive-scheme-medium; \
 	elif command -v pacman >/dev/null 2>&1; then \
 		echo ">> Arch"; \
-		sudo pacman -S --needed --noconfirm base-devel pkgconf libmicrohttpd gtk3 python curl; \
+		sudo pacman -S --needed --noconfirm base-devel pkgconf libmicrohttpd gtk3 python curl texlive-most; \
 	else \
-		echo "Gerenciador de pacotes nao suportado. Instale manualmente: gcc, make, pkg-config, libmicrohttpd (dev), GTK3 (dev), python3 e curl."; \
+		echo "Gerenciador de pacotes nao suportado. Instale manualmente: gcc, make, pkg-config, libmicrohttpd (dev), GTK3 (dev), python3, curl e TeX Live."; \
 		exit 1; \
 	fi
 	@echo ">> Dependencias instaladas. (Docker e opcional: https://docs.docker.com/engine/install/)"
@@ -198,10 +199,10 @@ simulador:
 
 # Teste automatizado: carga + queda + falhas injetadas + controle negativo (usa bin/servidor; nao use junto com cluster-up)
 teste: $(BIN_DIR)/servidor
-	$(PY) TestesConcorrência/teste_consorcio.py --modo local --binario $(BIN_DIR)/servidor
+	$(PY) testes/teste_consorcio.py --modo local --binario $(BIN_DIR)/servidor --relatorio-json resultados/teste_local.json
 
 teste-docker:
-	$(PY) TestesConcorrência/teste_consorcio.py --modo docker
+	$(PY) testes/teste_consorcio.py --modo docker --relatorio-json resultados/teste_docker.json
 
 # ------------------------------------------------------------ docker
 # Contexto de build = raiz do projeto (o "." no final)
@@ -224,7 +225,7 @@ docker-start:
 
 # ------------------------------------------------------------ relatorio
 relatorio:
-	cd relatorio && pdflatex -interaction=nonstopmode relatorio.tex && bibtex relatorio && pdflatex -interaction=nonstopmode relatorio.tex && pdflatex -interaction=nonstopmode relatorio.tex
+	cd relatorio && pdflatex -interaction=nonstopmode -halt-on-error relatorio.tex && pdflatex -interaction=nonstopmode -halt-on-error relatorio.tex
 
 clean:
 	rm -rf $(BIN_DIR)

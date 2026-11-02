@@ -27,7 +27,7 @@ WORKDIR /app
 COPY cJSON/ ./cJSON/
 COPY GrafoMapa/ ./GrafoMapa/
 COPY src/formatos.h ./src/formatos.h
-# a pasta "Consórcio" (com acento) vira "consorcio" dentro da imagem, para evitar problemas de codificação de nomes
+# copia o código da empresa para um diretório de build com nome de diretório ASCII para simplificar o build
 COPY src/Consorcio/ ./consorcio/
 
 # Todos os módulos do servidor: servidor + consórcio (2PC) + relógio de Lamport + grafo do mapa + cJSON.

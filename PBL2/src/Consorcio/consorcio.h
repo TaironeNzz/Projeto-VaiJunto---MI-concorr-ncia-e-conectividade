@@ -33,6 +33,12 @@ int  consorcioConfirmarItinerario(cJSON *req, int *idItinerario, char *idTransac
  * Quem chama libera com cJSON_Delete. */
 cJSON *listarTrechosConsorcio(const char *data);
 
+/* Reservas coordenadas pela empresa do cliente (inclui trechos de outras empresas). */
+cJSON *consorcioListarReservasCliente(const char *emailCliente);
+/* 1 = cancelado em todos os participantes; 2 = decisão durável, aguardando participantes; 0 = não encontrado/falha. */
+int consorcioCancelarReservaCliente(const char *emailCliente, int idTrechoGlobal);
+int consorcioCancelarItinerarioTx(const char *idTransacao, const char *motivo);
+
 /* API REST entre servidores (libmicrohttpd) */
 enum MHD_Result consorcioHandlerRest(void *cls, struct MHD_Connection *connection,
     const char *url, const char *method, const char *version,

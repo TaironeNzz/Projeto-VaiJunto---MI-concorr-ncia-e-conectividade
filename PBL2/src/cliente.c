@@ -580,6 +580,8 @@ void cancelar_carona(int socketCliente, Cliente *cliente){
             if (strcmp(buffer_mensagem, "CARONA_CANCELADA") == 0) {
                 printf("Carona cancelada com sucesso!\n");
                 printf("Se o trecho fazia parte de um itinerario, o itinerario inteiro foi cancelado e os outros trechos foram liberados.\n");
+            } else if (strcmp(buffer_mensagem, "CANCELAMENTO_PENDENTE") == 0) {
+                printf("Cancelamento registrado. Uma empresa participante esta indisponivel; a liberacao dos demais trechos sera retransmitida automaticamente.\n");
             } else {
                 printf("Carona nao cancelada! motivo: %s\n", buffer_mensagem);
             }

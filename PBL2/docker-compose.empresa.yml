@@ -13,6 +13,8 @@ services:
       EMPRESA_ID: "${EMPRESA_ID:-1}"
       PEERS: "${PEERS:-}"
       MODO_TESTE: "${MODO_TESTE:-0}"
+      CRASH_AT: "${CRASH_AT:-}"
+      TEST_PAUSE_BEFORE_DECISION_MS: "${TEST_PAUSE_BEFORE_DECISION_MS:-0}"
     ports: ["65432:65432", "8080:8080"]
     volumes: ["dados:/srv/empresa"]
 volumes:
