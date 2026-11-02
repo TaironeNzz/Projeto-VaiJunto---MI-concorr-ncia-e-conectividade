@@ -35,6 +35,21 @@ relatorio/             relatorio.tex, refs.bib, sbc-template.sty, sbc.bst, relat
 O **contexto de build do Docker é a raiz do repositório** (os `COPY` usam `cJSON/`, `GrafoMapa/` e `src/`). Dentro da imagem a pasta
 `Consórcio` vira `consorcio` (sem acento) para evitar problemas de codificação de nomes de arquivo.
 
+## Atalhos com o Makefile (na raiz do repositório)
+```bash
+make deps                  # instala gcc, libmicrohttpd, python3, curl (e GTK3 para a interface)
+make                       # compila bin/servidor, bin/cliente, bin/motorista
+make cluster-up            # 3 empresas locais em segundo plano (clientes :17001-17003, REST :18001-18003)
+make cluster-kill EMPRESA=2   # derruba a empresa 2 (kill -9)      make cluster-start EMPRESA=2   # religa (recupera do disco)
+make cluster-status | cluster-logs | cluster-down
+make simulador DURACAO=30 THREADS=24   # carga + auditoria no cluster local
+make teste                 # teste automatizado completo (modo local)
+make docker-up | docker-kill EMPRESA=2 | docker-start EMPRESA=2 | docker-down | teste-docker
+make relatorio             # compila o relatório SBC
+```
+Os clientes (`make run-cliente`) usam a porta fixa 65432: para usá-los com o cluster local, use `make run-servidor`
+(empresa na porta padrão) ou o Docker (`docker compose run --rm cliente`, host `empresa1`).
+
 ## Executando
 
 ### A. Três empresas na mesma máquina (desenvolvimento)
