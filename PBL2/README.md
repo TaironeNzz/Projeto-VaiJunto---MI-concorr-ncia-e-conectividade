@@ -1,911 +1,359 @@
-# VaiJunto — Consórcio de Caronas Compartilhadas
+# VaiJunto — Consórcio de Caronas Compartilhadas (Problema 2, TEC502)
 
-**Problema 2 — TEC502 | Sistemas Distribuídos**
+Cada empresa do consórcio executa o **seu próprio servidor** (contêiner Docker, armazenamento próprio). Passageiros e
+motoristas falam só com o servidor da própria empresa (TCP + JSON, como no Problema 1); os servidores cooperam entre si
+por uma **API REST** para que um passageiro monte itinerários com caronas de qualquer empresa e os confirme de forma
+**atômica**, sem servidor central, coordenador fixo ou banco compartilhado.
 
-Este README reúne a documentação operacional e técnica do repositório: arquitetura, instalação, compilação, API REST entre empresas, busca distribuída, exclusão mútua, precedência, prevenção de deadlock, atomicidade, cancelamento, tolerância a falhas, persistência, testes e emulação Docker.
-
----
-
-## 1. Visão geral
-
-O VaiJunto permite que um passageiro cadastrado em uma empresa do consórcio monte e confirme um itinerário com caronas publicadas por empresas diferentes. Cada empresa executa seu próprio servidor, mantém seus próprios dados e é a única responsável pelos assentos das caronas que publicou.
-
-- Passageiros e motoristas conectam-se **somente ao servidor da própria empresa**, pelo protocolo TCP/JSON reaproveitado do Problema 1.
-- Os servidores das empresas cooperam por uma **API REST HTTP/1.1 com JSON**.
-- Não existe servidor central fixo, banco de dados compartilhado ou armazenamento comum entre as empresas.
-- O servidor do passageiro coordena somente a transação iniciada por aquele passageiro. Outra transação pode ter outro coordenador.
-- A confirmação de um itinerário multiempresa usa **Two-Phase Commit (2PC)**; ou todos os trechos são confirmados ou a transação é abortada/compensada.
-
-### 1.1 Requisitos e mecanismos
-
-| Requisito | Mecanismo adotado | Implementação principal |
+| Requisito do enunciado | Como é atendido | Onde |
 |---|---|---|
-| Atomicidade entre empresas | Two-Phase Commit, coordenador por transação e log durável | `src/Consorcio/consorcio.c` |
-| Não vender o mesmo assento duas vezes | Bloqueio local dos assentos sob mutex e registro persistente | `src/Consorcio/consorcio.c`, `servidor.c` |
-| Precedência sem relógios sincronizados | Relógios lógicos de Lamport e prioridade `(timestamp, empresa)` | `lamport.c`, `consorcio.c` |
-| Evitar deadlock | Aquisição ordenada e política wait-die | `consorcio.c` |
-| Tolerância a falhas | Timeouts, suspeita temporária, lease, consulta cooperativa e retransmissão | `consorcio.c` |
-| Recuperação | Logs de coordenador/participante e reaplicação idempotente | `consorcio.c` |
-| Busca entre empresas | Consulta REST em tempo real aos pares | `consorcio.c`, `GrafoMapa/grafomapa.c` |
-| Emulação | Docker Compose com três empresas ou uma empresa por computador | `docker-compose*.yml` |
-| Carga e auditoria | Simulador e testes automatizados | `simulador/`, `testes/` |
-
-## 2. Arquitetura
-
-### 2.1 Componentes
-
-Cada instância de empresa executa:
-
-1. **Servidor de clientes:** atende passageiros e motoristas locais via TCP/JSON.
-2. **Catálogo local de caronas:** mantém os trechos publicados por motoristas daquela empresa.
-3. **Grafo de rotas:** combina trechos locais e remotos para formar itinerários entre origem e destino.
-4. **API REST do consórcio:** expõe saúde, catálogo, operações de transação, consulta de estado e cancelamento.
-5. **Coordenador 2PC:** servidor da empresa de origem do passageiro; registra a transação, envia PREPARE, decide COMMIT/ABORT e retransmite decisões pendentes.
-6. **Participante 2PC:** servidor proprietário de um ou mais trechos; bloqueia os assentos locais, persiste o voto e aplica a decisão do coordenador.
-7. **Persistência e recuperação:** armazena trechos, bloqueios, reservas, identificadores, relógio lógico e registros de transação.
-
-A empresa proprietária de um trecho é a única autoridade que altera sua capacidade e seus assentos. O coordenador mantém os dados necessários para conduzir a transação, mas não passa a ser proprietário de caronas remotas. O passageiro remoto é representado no participante por um identificador pseudonimizado; o e-mail original permanece na empresa de origem.
-
-### 2.2 Comparação com a arquitetura centralizada do Problema 1
-
-| Aspecto | Problema 1 — centralizado | Problema 2 — distribuído |
-|---|---|---|
-| Armazenamento | Dados concentrados no servidor central. | Cada empresa mantém seus próprios arquivos e estado. |
-| Coordenação | Uma trava local protege a reserva completa. | Coordenador por transação e 2PC entre participantes. |
-| Comunicação | Cliente comunica com o servidor central. | Cliente comunica com sua empresa; servidores comunicam por REST. |
-| Falhas | Queda do servidor central afeta o serviço inteiro. | A queda de um par afeta operações que dependem dele; os demais continuam com rotas disponíveis. |
-| Concorrência | Travas locais e ordem no servidor central. | Exclusão mútua local, precedência lógica e prevenção distribuída de deadlock. |
-| Complexidade | Menor número de mensagens e recuperação mais simples. | Mais mensagens, estados intermediários, logs, timeouts e reconciliação. |
-
-Deixou de ser possível consultar todos os dados por uma leitura local ou proteger a viagem completa com uma única seção crítica. Passou a ser necessário lidar com atrasos, timeouts, decisões duráveis, repetição de mensagens, transações em dúvida e recuperação após reinicialização.
-
-### 2.3 Estrutura do repositório
-
-```text
-PBL2/
-├── README.md                   # Documentação técnica e operacional do projeto
-├── Makefile                    # Compilação, cluster, testes e relatório
-├── DockerFile/
-│   ├── DockerFile.Servidor
-│   ├── DockerFile.Cliente
-│   └── DockerFile.Motorista
-├── docker-compose.yml          # Três empresas na mesma máquina
-├── docker-compose.empresa.yml  # Uma empresa por computador
-├── src/
-│   ├── cliente.c
-│   ├── motorista.c
-│   ├── interface.c
-│   └── Consorcio/
-│       ├── servidor.c
-│       ├── servidor.h
-│       ├── consorcio.c
-│       ├── consorcio.h
-│       ├── lamport.c
-│       └── lamport.h
-├── cJSON/                      # Biblioteca de JSON utilizada pelo projeto
-├── GrafoMapa/                  # Mapa e busca de itinerários
-├── simulador/                  # Gerador de carga sem interface gráfica
-├── testes/                     # Testes automatizados e concorrência
-├── relatorio/                  # Fonte e PDF do relatório no padrão SBC
-├── dados/                      # Dados locais de execução
-├── trechosCadastrados/         # Trechos da empresa
-├── transacoes/                 # Logs de transações
-├── Itinerarios/                # Registros de itinerários
-├── logs/                       # Logs de execução
-└── resultados/                 # Saídas JSON dos testes
-```
-
-O contexto de build do Docker é a raiz do repositório. Os `COPY` dos Dockerfiles usam `cJSON/`, `GrafoMapa/` e `src/`. O código de coordenação é copiado para `/app/consorcio` dentro da imagem.
-
-## 3. Instalação e compilação
-
-### 3.1 Dependências
-
-Em Debian/Ubuntu:
-
-```bash
-make dependencias
-# ou, equivalente:
-make deps
-```
-
-O alvo instala GCC, Make, `libmicrohttpd-dev`, GTK3, Python 3, curl e pacotes TeX Live necessários ao relatório. Docker é opcional para a compilação local e deve ser instalado separadamente para a emulação.
-
-### 3.2 Compilar
-
-Na raiz do projeto:
-
-```bash
-make
-```
-
-Os binários são gerados em `bin/`:
-
-```text
-bin/servidor
-bin/cliente
-bin/motorista
-```
-
-A interface gráfica é compilada se GTK3 estiver instalado e o arquivo `src/interface.c` estiver presente.
-
-Limpar somente os binários:
-
-```bash
-make clean
-```
-
-Limpar binários e estado local de execução (use com cuidado, pois apaga dados de `run/` e diretórios locais):
-
-```bash
-make distclean
-```
-
-### 3.3 Execução de uma empresa isolada, sem Docker
-
-Para testar apenas um servidor sem pares:
-
-```bash
-make run-servidor
-```
-
-Em outro terminal:
-
-```bash
-make run-cliente
-```
-
-E, para o motorista:
-
-```bash
-make run-motorista
-```
-
-O servidor isolado usa, por padrão, as portas TCP `65432` e REST `8080`.
-
-### 3.4 Cluster local de três empresas, sem Docker
-
-O Makefile permite executar três processos independentes, cada um com diretório de dados próprio em `run/empresaN`.
-
-```bash
-make                 # compila
-make cluster-up      # inicia E1, E2 e E3
-make cluster-status  # verifica a saúde
-make cluster-logs    # exibe logs recentes
-```
-
-Portas locais padrão:
-
-| Empresa | TCP clientes | REST entre empresas |
-|---|---:|---:|
-| E1 | 17001 | 18001 |
-| E2 | 17002 | 18002 |
-| E3 | 17003 | 18003 |
-
-Para derrubar e recuperar uma empresa:
-
-```bash
-make cluster-kill EMPRESA=2
-make cluster-start EMPRESA=2
-```
-
-Para encerrar todas:
-
-```bash
-make cluster-down
-```
-
-Para executar uma empresa em primeiro plano, use um terminal por empresa:
-
-```bash
-make run-empresa1
-make run-empresa2
-make run-empresa3
-```
-
-Não execute o teste local completo simultaneamente com `make cluster-up` usando as mesmas portas.
-
-## 4. Configuração do servidor
-
-As variáveis de ambiente disponíveis são:
-
-| Variável | Padrão | Significado |
-|---|---:|---|
-| `EMPRESA_ID` | `1` | Identificador único da empresa no consórcio. |
-| `PEERS` | vazio | Pares no formato `id=http://host:porta,id=http://host:porta`. A própria empresa é ignorada. |
-| `PORTA_CLIENTES` | `65432` | Porta TCP para os clientes da empresa. |
-| `PORTA_REST` | `8080` | Porta HTTP da API entre servidores. |
-| `PREPARE_TIMEOUT_MS` | `5000` | Timeout de espera dos votos PREPARE. |
-| `DECISAO_TIMEOUT_MS` | `2000` | Timeout para COMMIT/ABORT e consultas de estado. |
-| `BUSCA_TIMEOUT_MS` | `1500` | Timeout de consulta de catálogo remoto. |
-| `SUSPEITA_MS` | `3000` | Período em que um peer sem resposta é tratado como suspeito. |
-| `ESPERA_CONFLITO_MS` | `1500` | Tempo de espera permitido em conflito wait-die. |
-| `INDOUBT_MS` | `3000` | Tempo em PREPARED antes de iniciar consulta cooperativa do resultado. |
-| `PREPARED_TIMEOUT_MS` | `30000` | Lease do voto SIM; após o prazo, o participante sem decisão pode abortar. |
-| `MODO_TESTE` | `0` | `1` habilita campos de auditoria usados pelos testes automatizados. |
-| `CRASH_AT` | vazio | Ponto de falha injetada: `part_apos_prepare`, `part_antes_commit`, `coord_antes_decisao` ou `coord_apos_decisao`. |
-| `TEST_PAUSE_BEFORE_DECISION_MS` | `0` | Pausa artificial (até 10000 ms) antes da decisão, somente com `MODO_TESTE=1`; usada para testar cancelamento durante PREPARE. |
-
-Exemplo de configuração de três servidores:
-
-```bash
-# E1
-EMPRESA_ID=1 \
-PEERS="2=http://127.0.0.1:18002,3=http://127.0.0.1:18003" \
-PORTA_CLIENTES=17001 PORTA_REST=18001 ./bin/servidor
-
-# E2 (em outro diretório/terminal)
-EMPRESA_ID=2 \
-PEERS="1=http://127.0.0.1:18001,3=http://127.0.0.1:18003" \
-PORTA_CLIENTES=17002 PORTA_REST=18002 ./bin/servidor
-
-# E3 (em outro diretório/terminal)
-EMPRESA_ID=3 \
-PEERS="1=http://127.0.0.1:18001,2=http://127.0.0.1:18002" \
-PORTA_CLIENTES=17003 PORTA_REST=18003 ./bin/servidor
-```
-
-Cada processo deve ser iniciado em seu próprio diretório de execução para que seus arquivos não sejam compartilhados.
-
-## 5. API REST entre servidores
-
-Esta seção é a especificação da API interempresarial implementada no servidor. Passageiros e motoristas **não** consomem diretamente esses endpoints; continuam usando o protocolo TCP/JSON do servidor da própria empresa.
-
-### 5.1 Convenções gerais
-
-- Prefixo: `/api/v1`.
-- Transporte: HTTP/1.1 sobre TCP.
-- Corpo: JSON UTF-8; tamanho máximo de 64 KiB.
-- Cabeçalho de conteúdo: `Content-Type: application/json`.
-- Identificador da transação: `E<empresa-coordenadora>-<timestamp-hex>-<sequência>`. O identificador permite reconhecer a empresa coordenadora.
-- As respostas incluem `Content-Type: application/json; charset=utf-8`, `X-Lamport-Clock` e `X-Empresa-Id`.
-- As chamadas internas incluem `X-Lamport-Clock`; o servidor receptor atualiza seu relógio lógico ao receber o valor.
-- O relógio lógico não mede timeout. Timeouts usam o relógio monotônico local.
-
-| Cabeçalho | Direção | Significado |
-|---|---|---|
-| `Content-Type: application/json` | Requisição | Corpo em JSON. |
-| `X-Lamport-Clock: <inteiro>` | Requisição | Relógio lógico do emissor. |
-| `X-Lamport-Clock: <inteiro>` | Resposta | Relógio lógico após o processamento. |
-| `X-Empresa-Id: <inteiro>` | Resposta | Identificador da empresa que respondeu. |
-
-A ausência de `X-Lamport-Clock` não impede o tratamento da requisição, mas as chamadas internas do consórcio enviam esse cabeçalho.
-
-### 5.2 Endpoints
-
-#### A. Saúde da empresa
-
-```http
-GET /api/v1/health
-```
-
-Resposta `200`:
-
-```json
-{
-  "status": "ok",
-  "empresaId": 2,
-  "api": "v1",
-  "lamport": 184
-}
-```
-
-Usado para verificar a disponibilidade do peer. Falha ou timeout faz o chamador marcar temporariamente o peer como suspeito. As demais empresas continuam atendendo operações que não dependem dele.
-
-#### B. Catálogo de trechos
-
-```http
-GET /api/v1/trechos
-```
-
-Filtros opcionais: `origem`, `destino`, `data` e `disponiveis=true`.
-
-Exemplo:
-
-```http
-GET /api/v1/trechos?disponiveis=true&data=09%2F11%2F2026
-```
-
-Resposta `200`: array JSON com `empresaId`, `idTrecho`, `nomeMotorista`, `origem`, `destino`, `data`, `hora`, `capacidade`, `capacidadeTotal` e `preco`. `idTrecho` é local à empresa que respondeu. O mecanismo de busca combina empresa e ID local para formar um identificador global.
-
-Consulta de um trecho específico:
-
-```http
-GET /api/v1/trechos/{id}
-```
-
-Respostas: `200` com o trecho; `400` para ID inválido; `404` se o trecho não existir.
-
-O parâmetro `auditoria=1` expõe campos internos — `clientes`, `reservas`, `bloqueios` e `passageiros` — somente quando `MODO_TESTE=1`. Não habilite auditoria em produção.
-
-#### C. Preparação da transação — fase 1 do 2PC
-
-```http
-POST /api/v1/transacoes/{tx}/prepare
-Content-Type: application/json
-```
-
-O coordenador envia os trechos pertencentes à empresa participante. O participante ordena os trechos locais por ID antes de adquirir os assentos.
-
-Exemplo de requisição:
-
-```json
-{
-  "coordenador": 1,
-  "leaseMs": 30000,
-  "ts": { "lamport": 184, "empresa": 1 },
-  "participantes": [1, 2],
-  "passageiro": { "id": "p1-2b9f...", "nome": "Ana" },
-  "trechos": [
-    {
-      "idTrecho": 0,
-      "origem": "Simoes_Filho",
-      "destino": "Feira_de_Santana"
-    }
-  ]
-}
-```
-
-O ID enviado para outra empresa é um pseudônimo derivado do e-mail. O e-mail original permanece no servidor de origem.
-
-Resposta `200` — voto SIM:
-
-```json
-{
-  "voto": "SIM",
-  "trechos": [ { "empresaId": 2, "idTrecho": 0 } ]
-}
-```
-
-Resposta `409` — voto NÃO, por exemplo:
-
-```json
-{ "voto": "NAO", "motivo": "SEM_ASSENTOS" }
-```
-
-Outros retornos: `400` para JSON/campos inválidos; `409` para conflito, trecho inexistente, duplicidade ou transação já abortada; `500` quando falha de persistência/limpeza impede uma resposta segura.
-
-#### D. Decisão COMMIT
-
-```http
-POST /api/v1/transacoes/{tx}/commit
-Content-Type: application/json
-```
-
-Corpo: `{}`.
-
-- `200`: COMMIT persistido no participante e aplicado (ou reaplicado idempotentemente) nos trechos locais.
-- `404`: transação desconhecida.
-- `409`: participante já possui decisão ABORT.
-- `500`: falha de persistência/aplicação; o coordenador deve retransmitir a mesma decisão.
-
-Resposta `200`:
-
-```json
-{ "txId": "E1-...", "estado": "COMMITTED" }
-```
-
-#### E. Decisão ABORT
-
-```http
-POST /api/v1/transacoes/{tx}/abort
-Content-Type: application/json
-```
-
-Corpo: `{}`.
-
-- `200`: ABORT durável e bloqueios liberados; chamada repetida é idempotente.
-- `409`: a transação já foi confirmada no participante; o coordenador deve usar compensação quando necessário.
-- `500`: falha ao gravar ou liberar; a decisão deve ser retransmitida.
-
-#### F. Compensação de reserva confirmada
-
-```http
-POST /api/v1/transacoes/{tx}/cancelar
-Content-Type: application/json
-```
-
-Corpo: `{}`.
-
-Usado pelo coordenador quando um COMMIT já foi aplicado em algum participante ou quando precisa concluir a liberação de um participante em PREPARED. A operação registra ABORT no participante antes de desfazer reservas. É idempotente e também remove bloqueios que ainda não tenham sido convertidos em reservas.
-
-Retornos: `200` quando a compensação foi aplicada; `500` quando a limpeza precisa ser repetida.
-
-#### G. Consulta do estado de uma transação
-
-```http
-GET /api/v1/transacoes/{tx}?papel=coordenador
-GET /api/v1/transacoes/{tx}?papel=participante
-```
-
-Resposta do coordenador (`200`), exemplo:
-
-```json
-{
-  "txId": "E1-...",
-  "papel": "coordenador",
-  "decisao": "COMMIT",
-  "finalizada": true,
-  "trechos": [
-    { "empresaId": 1, "idTrecho": 0 },
-    { "empresaId": 2, "idTrecho": 0 }
-  ]
-}
-```
-
-`decisao` pode ser `PENDENTE`, `COMMIT` ou `ABORT`. Se não existir log do coordenador, aplica-se *presumed abort* e a resposta informa `decisao=ABORT` e `presumida=true`.
-
-A consulta do participante retorna `papel=participante` e `estado`, que pode ser `PREPARANDO`, `PREPARED`, `COMMITTED` ou `ABORTED`.
-
-#### H. Terminação cooperativa
-
-```http
-POST /api/v1/transacoes/{tx}/terminacao
-Content-Type: application/json
-```
-
-Corpo: `{}`.
-
-Um participante em dúvida consulta outro participante para descobrir se a transação está `COMMITTED` ou `ABORTED`. A resposta `200` contém `txId` e `estado`. Se nenhum participante conhecer a decisão, o processo continua em dúvida até receber a decisão do coordenador ou até o fim do lease.
-
-#### I. Cancelamento do itinerário no coordenador
-
-```http
-POST /api/v1/itinerarios/{tx}/cancelar
-Content-Type: application/json
-```
-
-Exemplo de corpo:
-
-```json
-{ "motivo": "motorista cancelou trecho participante" }
-```
-
-Somente a empresa indicada no ID da transação pode atender a rota. O coordenador grava ABORT antes de propagar a decisão.
-
-- `200`: todos os participantes confirmaram o cancelamento.
-- `202`: ABORT foi persistido, mas há participantes sem ACK; a manutenção retransmitirá a decisão.
-- `400`: caminho inválido.
-- `404`: transação inválida ou esta empresa não é coordenadora.
-
-### 5.3 Códigos HTTP comuns
-
-| HTTP | Significado |
-|---:|---|
-| `200` | Operação concluída ou consulta atendida. |
-| `202` | Decisão durável registrada; propagação ainda pendente. |
-| `400` | JSON, ID ou caminho inválido. |
-| `404` | Recurso, trecho ou transação inexistente; ou empresa não é coordenadora. |
-| `409` | Conflito de estado, assento indisponível ou estado incompatível com a operação. |
-| `413` | Corpo maior que 64 KiB. |
-| `500` | Falha de persistência ou aplicação; a mesma operação deve ser repetida. |
-
-### 5.4 Timeouts, falhas e idempotência
-
-O cliente HTTP interno aplica timeouts e marca temporariamente um peer como suspeito durante `SUSPEITA_MS`. A busca ignora temporariamente os peers suspeitos e devolve trechos locais e dos pares que responderam; o resultado pode ficar incompleto enquanto uma empresa estiver fora do ar.
-
-Durante PREPARE, timeout não é voto SIM: impede o COMMIT e leva o coordenador a registrar ABORT. Depois que COMMIT ou ABORT é persistido, o coordenador mantém a decisão em disco e retransmite aos participantes sem ACK.
-
-O ID `tx` é a chave de idempotência. A mesma mensagem pode chegar mais de uma vez: o participante verifica seu estado e reaplica a operação sem duplicar reservas nem liberar capacidade duas vezes. O participante grava PREPARED antes de votar SIM. `leaseMs` limita quanto tempo um voto SIM pode permanecer sem decisão. Se o participante abortar pelo fim do lease antes de receber COMMIT, o coordenador detecta a recusa e inicia ABORT/compensação nos demais participantes.
-
-### 5.5 Diagrama de sequência da confirmação
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant P as Passageiro
-    participant C as Servidor da empresa de origem (coordenador)
-    participant A as Servidor participante A
-    participant B as Servidor participante B
-    P->>C: confirmar itinerário (trechos A + B)
-    C->>C: gravar PREPARANDO (fsync)
-    par PREPARE em paralelo
-        C->>A: POST /api/v1/transacoes/{tx}/prepare
-        C->>B: POST /api/v1/transacoes/{tx}/prepare
-    end
-    A->>A: bloquear assentos + gravar PREPARED
-    B->>B: bloquear assentos + gravar PREPARED
-    A-->>C: voto SIM
-    B-->>C: voto SIM
-    C->>C: gravar COMMIT (fsync)
-    par decisão em paralelo
-        C->>A: POST /api/v1/transacoes/{tx}/commit
-        C->>B: POST /api/v1/transacoes/{tx}/commit
-    end
-    A-->>C: ACK COMMITTED
-    B-->>C: ACK COMMITTED
-    C-->>P: ITINERARIO_CONFIRMADO
-```
-
-Se algum participante votar NÃO ou não responder no prazo, o coordenador persiste ABORT e envia `POST .../abort`. Se algum participante já tiver aplicado COMMIT antes de ocorrer uma divergência/expiração de lease, o coordenador usa a operação de compensação `POST .../cancelar`.
-
-### 5.6 Diagrama de sequência do cancelamento pelo motorista
-
-```mermaid
-sequenceDiagram
-    autonumber
-    participant M as Motorista na empresa B
-    participant B as Servidor da empresa B
-    participant C as Coordenador da transação (empresa A)
-    participant A as Servidor participante A
-    M->>B: cancelar trecho
-    B->>B: marcar trecho como cancelando
-    B->>C: POST /api/v1/itinerarios/{tx}/cancelar
-    C->>C: gravar ABORT durável sob mutex de decisão
-    par ABORT/compensação
-        C->>A: POST /api/v1/transacoes/{tx}/abort ou /cancelar
-        C->>B: POST /api/v1/transacoes/{tx}/abort ou /cancelar
-    end
-    A-->>C: ACK
-    B-->>C: ACK
-    C-->>B: 200 ou 202
-    B->>B: remover trecho após decisão durável
-    B-->>M: TRECHO_CANCELADO
-```
-
-## 6. Busca distribuída
-
-A busca consulta o catálogo local e os pares conhecidos por REST em tempo real. Cada trecho retornado informa sua empresa proprietária. O servidor combina empresa e ID local para formar um identificador global e constrói itinerários ligando o destino de um trecho à origem do seguinte.
-
-A solução não mantém um catálogo autoritativo replicado integralmente. Quando um peer não responde dentro do timeout, ele é marcado como suspeito pelo período `SUSPEITA_MS` e temporariamente removido das consultas. A busca continua usando dados locais e dos pares que responderam, mas pode retornar um conjunto incompleto. Operações que não dependem do servidor indisponível continuam funcionando.
-
-## 7. Exclusão mútua, precedência e deadlock
-
-### 7.1 Exclusão mútua por trecho
-
-A empresa proprietária protege a atualização de cada trecho por mutex local. Durante PREPARE, os assentos entram na lista persistente `bloqueios`; depois de COMMIT, passam para `reservas`. O participante grava PREPARED antes de responder SIM.
-
-Como toda alteração da capacidade passa pelo servidor proprietário, dois coordenadores não conseguem confirmar o mesmo assento simultaneamente. A capacidade é controlada considerando assentos livres, bloqueados e confirmados. A auditoria verifica a conservação da capacidade e a correspondência entre passageiros e reservas.
-
-### 7.2 Precedência com relógios de Lamport
-
-Não são comparados relógios físicos de computadores diferentes. Cada servidor mantém um relógio lógico de Lamport: incrementa-o em eventos locais/envios e, ao receber uma mensagem com relógio remoto, atualiza o valor para:
-
-\[
-C \leftarrow \max(C,C_{remoto}) + 1
-\]
-
-A prioridade total é o par `(timestamp, idEmpresa)`. O ID da empresa desempata timestamps iguais. Assim, existe uma ordenação determinística sem sincronizar os relógios físicos. A marca d'água do relógio é persistida para evitar regressão após reinicialização.
-
-### 7.3 Prevenção de deadlock com wait-die
-
-O participante ordena os IDs locais dos trechos antes de adquirir assentos, reduzindo inversões na aquisição de múltiplos recursos. Em um conflito, uma transação mais velha pode esperar por uma mais nova; uma transação mais nova que encontra uma mais velha aborta e tenta novamente.
-
-As arestas de espera seguem somente da transação mais velha para a mais nova, o que impede ciclos. A consequência é que transações mais novas podem reiniciar mesmo quando poderiam esperar; isso reduz deadlocks ao custo de abortos e latência adicional.
-
-## 8. Atomicidade distribuída e cancelamento
-
-### 8.1 Confirmação com Two-Phase Commit
-
-O servidor de origem do passageiro cria o ID da transação e grava PREPARANDO no log do coordenador antes de enviar PREPARE. As chamadas aos participantes são executadas em paralelo. Cada participante valida seus trechos locais, adquire bloqueios e grava PREPARED antes de responder SIM.
-
-- **Fase 1 — PREPARE:** participantes reservam temporariamente os assentos e votam SIM ou NÃO.
-- **Decisão:** se todos responderem SIM dentro do prazo, o coordenador grava COMMIT durável; caso contrário, grava ABORT.
-- **Fase 2 — decisão:** o coordenador envia COMMIT ou ABORT aos participantes.
-- **ACK e retransmissão:** o coordenador registra as confirmações recebidas e retransmite decisões sem ACK.
-
-Durante uma falha do coordenador depois de PREPARED, os participantes podem permanecer em dúvida até consultar outro participante, recuperar a decisão persistida ou atingir o lease do voto SIM. A solução prioriza consistência: não confirma uma transação cuja decisão não pode ser conhecida com segurança.
-
-### 8.2 Cancelamento pelo cliente
-
-O cancelamento do cliente identifica a transação do itinerário e desfaz o conjunto de trechos que a compõe, inclusive os que pertencem a outras empresas. O cancelamento não deve ser tratado como remoção isolada de um assento quando aquele assento faz parte de um itinerário multiempresa.
-
-### 8.3 Cancelamento pelo motorista
-
-Quando o motorista cancela um trecho, o servidor proprietário identifica transações que usam o trecho tanto entre as reservas confirmadas quanto entre bloqueios PREPARED. Para cada transação, encaminha o pedido ao coordenador indicado no ID da transação.
-
-Se a transação ainda estiver PREPARANDO, o coordenador grava ABORT sob o mutex que serializa decisões e retransmissões. O participante que recebe ABORT durante a aquisição dos bloqueios sinaliza a thread de PREPARE, aguarda a limpeza e só então confirma o ACK. Se o COMMIT já tiver sido aplicado, usa-se compensação idempotente para remover reservas confirmadas e bloqueios ainda existentes.
-
-O trecho do motorista só é removido depois de a decisão de cancelamento estar registrada nos coordenadores envolvidos. Um COMMIT atrasado não pode sobrescrever um ABORT já persistido.
-
-## 9. Tolerância a falhas
-
-A indisponibilidade é detectada por timeouts nas chamadas REST e por uma janela de suspeita. Um timeout não prova que o processo falhou em uma rede assíncrona; é um critério operacional para seguir de forma segura.
-
-| Momento da falha | Comportamento esperado |
+| Atomicidade entre empresas | Two-Phase Commit com **coordenador por transação** (a empresa do passageiro), log write-ahead com fsync | `consorcio.c` |
+| Nenhum assento duplicado | Cada empresa é dona dos seus assentos; bloqueio sob mutex do trecho, durável e idempotente | `consorcio.c`, `servidor.c` |
+| Precedência na disputa | Relógio lógico de **Lamport** persistido + prioridade `(ts, empresa)` + **wait-die** (sem deadlock) | `lamport.c`, `consorcio.c` |
+| Falhas e recuperação | Log do coordenador/participante, recuperação na partida, terminação cooperativa, lease do voto SIM, retransmissão | `consorcio.c` |
+| API REST entre servidores | libmicrohttpd, 10 endpoints, `X-Lamport-Clock` | `docs/API.md`, `consorcio.c` |
+| Docker, uma empresa por contêiner | `DockerFile.Servidor`, `docker-compose.yml`, `docker-compose.empresa.yml` | raiz |
+| Simulador de passageiros | `simulador/simulador.py` (carga concorrente sem GUI) | `simulador/` |
+| Teste automatizado (carga + falhas) | `testes/teste_consorcio.py` (I1, I2, I3 + disponibilidade + controle negativo) | `testes/` |
+| Relatório SBC | `relatorio/relatorio.tex` (+ PDF) | `relatorio/` |
+
+# API REST entre os servidores do consórcio VaiJunto (v1)
+
+Cada empresa executa o seu próprio servidor (contêiner Docker, armazenamento próprio) e expõe, além da porta dos
+clientes (TCP/JSON, `65432`), uma **API REST/HTTP na porta `8080`**. É por essa API — HTTP simples, que atravessa
+firewalls — que as empresas cooperam. Não há servidor central, coordenador fixo nem banco compartilhado.
+
+- Base: `http://<host-da-empresa>:8080/api/v1`
+- Formato: JSON UTF-8 (`Content-Type: application/json; charset=utf-8`). Cada resposta fecha a conexão.
+- Quem chama: **apenas outros servidores do consórcio**. Passageiros e motoristas falam só com o servidor da própria empresa.
+
+## 1. Convenções
+
+| Item | Regra |
 |---|---|
-| Antes do PREPARE | A reserva que depende da empresa indisponível não é confirmada. |
-| Durante PREPARE | Timeout não é voto SIM; o coordenador registra ABORT e retransmite quando o participante voltar. |
-| Depois do voto SIM e antes da decisão | O estado PREPARED permanece no disco. O assento não é disponibilizado de forma insegura; a transação aguarda decisão/lease e recuperação. |
-| Depois de COMMIT | O coordenador mantém COMMIT durável e repete a entrega ao participante após seu retorno. |
-| Queda do coordenador | Ao reiniciar, recupera seu log e retoma decisões pendentes. Sem decisão durável, não presume COMMIT. |
+| **Relógio de Lamport** | Toda requisição e resposta leva `X-Lamport-Clock: <inteiro>`. Ao **enviar**: `C = C + 1` e o valor vai no cabeçalho. Ao **receber**: `C = max(C, C_msg) + 1`. O relógio é persistido (marca d'água em disco) e nunca volta atrás após uma queda. |
+| **`X-Empresa-Id`** | Presente nas respostas: id da empresa que respondeu. |
+| **Id global de trecho** | O passageiro vê `id = empresaId × 1 000 000 + idLocal` para trechos de **outras** empresas. Ids `< 1 000 000` são da própria empresa. Na API REST entre servidores o trecho é sempre o **id local** (`0 ≤ idTrecho < 1 000 000`) da empresa dona. |
+| **Id da transação** | `E<empresaCoordenadora>-<ms>-<seq>` (ex.: `E1-1a15b13430b-0`). Só `[A-Za-z0-9_-]`, 3 a 64 caracteres (validado: o id vira nome de arquivo). A empresa coordenadora é deduzida do prefixo. |
+| **Prioridade** | `(ts, empresa)`, onde `ts` é o timestamp de Lamport obtido pelo coordenador ao iniciar a transação e `empresa` desempata. Menor = mais antiga = precedência. |
+| **Privacidade** | O e-mail do passageiro **nunca sai** da empresa dele: para outras empresas vai um pseudônimo `p<empresa>-<hash64>`. |
+| **Idempotência** | Todas as operações de transação podem ser repetidas (mensagens duplicadas/atrasadas/reordenadas): repetir `prepare`, `commit`, `abort` ou `cancelar` devolve o mesmo resultado sem efeitos extras. |
+| **Detecção de falhas** | Timeouts de conexão/resposta. Um par que não responde é marcado *suspeito* por `SUSPEITA_MS` e tratado como fora do ar (sem bloquear as demais empresas). |
+| **Erros** | Corpo `{"erro":"CODIGO","mensagem":"texto"}`. |
 
-As empresas que não dependem do servidor que caiu continuam atendendo caronas locais e itinerários compostos somente por empresas acessíveis. Uma partição de rede pode reduzir temporariamente as rotas disponíveis ou impedir uma confirmação específica. A solução prioriza consistência da transação afetada sobre disponibilidade dessa confirmação.
+## 2. Recursos
 
-## 10. Recuperação e persistência
+### 2.1 `GET /health`
+Verifica se a empresa está viva. **200** → `{"status":"ok","empresaId":2,"api":"v1","lamport":57}`
 
-Cada empresa mantém localmente:
+### 2.2 `GET /trechos`
+Lista as caronas **da empresa** (cada empresa é a única responsável pelos seus assentos).
 
-- arquivos de trechos e identificadores;
-- registros de transações coordenadas, incluindo rota, participantes, decisão e ACKs;
-- registros de transações participantes, incluindo ID, estado, prioridade, coordenador, trechos locais, passageiro pseudonimizado, bloqueios e lease;
-- relógio lógico de Lamport persistido.
+Query (todas opcionais): `origem`, `destino` (sem diferenciar maiúsculas), `data` (`dd/mm/aaaa`), `disponiveis=true`
+(só com `capacidade > 0`), `auditoria=1` (só efetivo com o servidor em `MODO_TESTE=1`).
 
-As alterações de estado são gravadas antes da resposta de protocolo que depende delas. Na recuperação, os registros são carregados e as operações são reaplicadas idempotentemente:
+**200** → array:
+```json
+[{"empresaId":2,"idTrecho":0,"nomeMotorista":"Motorista2","origem":"Simoes_Filho","destino":"Feira_de_Santana",
+  "data":"27/10/2026","hora":"23:00","capacidade":24,"capacidadeTotal":25,"preco":25}]
+```
+`capacidade` = assentos **livres** agora (descontados bloqueios de transações em andamento). Com `auditoria=1` em
+`MODO_TESTE`: `clientes` (nº de reservas), `reservas:[{tx,id}]`, `bloqueios:[tx]`, `passageiros:[id]`.
 
-- `COMMITTED`: converte bloqueios em reservas;
-- `ABORTED`: libera bloqueios e conclui compensações pendentes;
-- coordenador com decisão sem ACK: retransmite a decisão ao participante.
+### 2.3 `GET /trechos/{idLocal}`
+**200** trecho (mesmo formato) · **400** `ID_INVALIDO` · **404** `TRECHO_NAO_ENCONTRADO`.
 
-As operações repetidas verificam se a reserva ou o bloqueio já existe antes de modificar a capacidade, evitando dupla contabilização ou dupla liberação. A recuperação também reconcilia inconsistências legadas entre as listas de reservas e clientes, solicitando o cancelamento das transações órfãs em vez de manter itinerários parcialmente representados.
+### 2.4 `POST /transacoes/{tx}/prepare` — fase 1 do 2PC (coordenador → participante)
+Pede que a empresa **bloqueie** um assento em cada trecho listado e vote. Corpo:
+```json
+{"coordenador":1,
+ "ts":{"lamport":42,"empresa":1},
+ "leaseMs":30000,
+ "participantes":[1,2,3],
+ "passageiro":{"id":"p1-43d37e421ded0248","nome":"Ana"},
+ "trechos":[{"idTrecho":0,"origem":"Simoes_Filho","destino":"Feira_de_Santana"}]}
+```
+| Status | Corpo | Significado |
+|---|---|---|
+| **200** | `{"voto":"SIM","trechos":[<trecho>...]}` | Assentos bloqueados **e** voto gravado em disco (fsync) antes de responder. Repetições devolvem o mesmo SIM. |
+| **409** | `{"voto":"NAO","motivo":"..."}` | Voto NÃO. Motivos: `SEM_ASSENTOS`, `CONFLITO_PRECEDENCIA`, `TIMEOUT_CONFLITO`, `RESERVA_DUPLICADA`, `TRECHO_NAO_ENCONTRADO`, `TRECHO_INCOMPATIVEL` (origem/destino não conferem), `TX_ABORTADA` (o ABORT chegou antes), `EM_ANDAMENTO`, `ERRO_PERSISTENCIA`. |
+| **400** | `{"erro":"REQUISICAO_INVALIDA"}` ou `JSON_INVALIDO` | Corpo inválido (até 16 trechos, ids sem repetição). |
+| **413** | `CORPO_MUITO_GRANDE` | Corpo acima de 64 KiB. |
 
-## 11. Simulador de passageiros
+`leaseMs` é o prazo do voto SIM (ver §4.4). `0` = 2PC estrito.
 
-O simulador não possui interface gráfica e usa a biblioteca padrão do Python 3. Ele gera passageiros virtuais, buscas e confirmações concorrentes a partir dos servidores informados.
+### 2.5 `POST /transacoes/{tx}/commit` — fase 2 (decisão COMMIT)
+Converte os bloqueios em reservas definitivas. Corpo `{}`.
+**200** `{"txId":..,"estado":"COMMITTED"}` (inclusive se já estava) · **404** `TRANSACAO_DESCONHECIDA` · **409** `ESTADO_INVALIDO` (a empresa já **abortou** por timeout — o coordenador então compensa, §4.4).
 
-Exemplo para três empresas no cluster Docker local:
+### 2.6 `POST /transacoes/{tx}/abort` — fase 2 (decisão ABORT)
+Libera os bloqueios. Corpo `{}`. **200** `{"txId":..,"estado":"ABORTED"}` (também para transação desconhecida: grava um
+*tombstone* que faz um PREPARE atrasado receber NÃO) · **409** `TRANSACAO_JA_CONFIRMADA`.
 
+### 2.7 `POST /transacoes/{tx}/cancelar` — compensação
+Desfaz a transação em **qualquer** estado, inclusive já `COMMITTED`. Só o coordenador a usa, e apenas quando outro
+participante abortou por lease e o COMMIT decidido não vale mais em todas as empresas. **200** `{"txId":..,"estado":"ABORTED"}`.
+
+### 2.8 `POST /transacoes/{tx}/terminacao` — terminação cooperativa (participante → participante)
+Pergunta o estado local da transação a outra empresa participante. **200** `{"txId":..,"estado":"PREPARED|COMMITTED|ABORTED|..."}`.
+Se a empresa consultada **não conhece** a transação, ela grava ABORTED e passa a **nunca mais votar SIM** nela.
+
+### 2.9 `GET /transacoes/{tx}?papel=coordenador|participante`
+- `papel=coordenador` (só na empresa coordenadora): **200**
+  `{"txId":..,"papel":"coordenador","decisao":"COMMIT|ABORT|PENDENTE","finalizada":true,"trechos":[{"empresaId":2,"idTrecho":0}]}`.
+  Sem registro ⇒ `{"decisao":"ABORT","presumida":true}` (*presumed abort*). **404** `NAO_E_COORDENADOR`.
+- `papel=participante`: **200** `{"txId":..,"papel":"participante","estado":"PREPARED|COMMITTED|ABORTED|DESCONHECIDA"}`.
+
+### 2.10 Códigos gerais
+`400` requisição inválida · `404` recurso/rota inexistente (`ROTA_NAO_ENCONTRADA`) · `409` conflito de estado/voto NÃO ·
+`413` corpo grande · `5xx` falha interna (o coordenador trata como "sem resposta").
+
+## 3. Diagrama de sequência — itinerário com trechos de três empresas
+
+Passageiro da **Empresa 1** confirma `Salvador → Simoes_Filho` (E1) + `Simoes_Filho → Feira` (E2) + `Feira → Serrinha` (E3).
+A Empresa 1 é a **coordenadora desta transação** (e só desta).
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor P as Passageiro (E1)
+    participant E1 as Empresa 1 (coordenadora)
+    participant E2 as Empresa 2
+    participant E3 as Empresa 3
+
+    P->>E1: TCP/JSON confirmar_itinerario {rota:[T1, T2(E2), T3(E3)]}
+    Note over E1: valida a cadeia origem→destino<br/>tx = E1-..., ts = Lamport tick, prioridade (ts, 1)<br/>grava coord_tx.json = PREPARANDO (fsync)
+    par FASE 1 - PREPARE em paralelo
+        E1->>E1: prepare (local): bloqueia assento de T1
+        E1->>E2: POST /transacoes/{tx}/prepare {ts, trechos:[T2], passageiro:pseudônimo}
+        E1->>E3: POST /transacoes/{tx}/prepare {ts, trechos:[T3], passageiro:pseudônimo}
+    end
+    Note over E2,E3: cada participante: bloqueia o assento (wait-die por prioridade),<br/>grava o bloqueio + registro PREPARED (fsync) e SÓ ENTÃO vota
+    E2-->>E1: 200 {voto:SIM}
+    E3-->>E1: 200 {voto:SIM}
+    Note over E1: todos votaram SIM (dentro de ½ lease)<br/>grava COMMIT (fsync) ANTES de enviar — ponto de decisão
+    E1->>E1: cria Itinerarios/itinerarioN.json
+    par FASE 2 - COMMIT em paralelo
+        E1->>E1: commit local
+        E1->>E2: POST /transacoes/{tx}/commit
+        E1->>E3: POST /transacoes/{tx}/commit
+    end
+    E2-->>E1: 200 COMMITTED
+    E3-->>E1: 200 COMMITTED
+    Note over E1: grava finalizada=true
+    E1-->>P: {"status":"ITINERARIO_CONFIRMADO","idItinerario":N,"idTransacao":"E1-..."}
+```
+
+### 3.1 Variante: um participante vota NÃO (atomicidade)
+
+```mermaid
+sequenceDiagram
+    participant E1 as Empresa 1 (coord.)
+    participant E2 as Empresa 2
+    participant E3 as Empresa 3
+    E1->>E2: prepare
+    E1->>E3: prepare
+    E2-->>E1: 200 SIM (assento de T2 bloqueado)
+    E3-->>E1: 409 NAO {motivo: SEM_ASSENTOS}
+    Note over E1: decisão ABORT gravada (fsync)
+    E1->>E2: POST abort  (libera o assento de T2)
+    E1->>E3: POST abort
+    E1-->>P: ASSENTO_INDISPONIVEL   (nenhum trecho ficou reservado)
+```
+
+### 3.2 Variante: uma empresa cai no meio
+
+```mermaid
+sequenceDiagram
+    participant E1 as Empresa 1 (coord.)
+    participant E2 as Empresa 2
+    participant E3 as Empresa 3
+    E1->>E2: prepare
+    E1->>E3: prepare
+    E2--xE1: (queda / timeout)
+    E3-->>E1: 200 SIM
+    Note over E1: E2 sem resposta ⇒ voto = "não" ⇒ ABORT (gravado)<br/>E2 marcada suspeita por SUSPEITA_MS (E1 não bloqueia mais nela)
+    E1->>E3: POST abort
+    E1-->>P: EMPRESA_INDISPONIVEL
+    Note over E1: abort de E2 fica pendente: a thread de manutenção retransmite até receber ack
+    Note over E2: ao voltar: lê o log, vê PREPARED sem decisão<br/>⇒ pergunta ao coordenador (GET /transacoes/{tx}?papel=coordenador)<br/>⇒ ABORT: libera o assento
+```
+
+## 4. Garantias e como o protocolo as entrega
+
+### 4.1 Atomicidade (Two-Phase Commit com **coordenador por transação**)
+O coordenador é a empresa à qual o passageiro está conectado, **somente para aquela transação**. Não existe
+coordenador fixo: três empresas coordenam transações diferentes ao mesmo tempo. Regras de durabilidade:
+1. a decisão (COMMIT/ABORT) é gravada com `fsync` **antes** de ser enviada;
+2. o voto SIM só é enviado **depois** de o participante gravar bloqueio e `PREPARED` (write-ahead);
+3. a mudança de estado é gravada **antes** de aplicada ao trecho, então a recuperação sempre consegue refazer ou desfazer;
+4. sem registro de decisão no coordenador ⇒ *presumed abort*.
+
+### 4.2 Nenhum assento duplicado (exclusão mútua)
+Cada empresa é a **única** dona dos assentos das suas caronas e os altera sob o mutex do trecho. O bloqueio do
+assento (decremento de `capacidade` + registro em `bloqueios`) é uma seção crítica local e durável; `PREPARE` repetido é
+idempotente; o mesmo passageiro não reserva duas vezes o mesmo trecho (`RESERVA_DUPLICADA`). Vários trechos de
+uma empresa são bloqueados em ordem crescente de id (sem *deadlock* local).
+
+### 4.3 Precedência na disputa do último assento (Lamport + wait-die)
+Relógios físicos não são confiáveis nem sincronizados, então a precedência usa o **relógio lógico de Lamport**:
+se *a → b* então `C(a) < C(b)`, independentemente de atrasos. A prioridade total é `(ts, empresa)`.
+Quando uma transação quer um assento que está bloqueado por outra:
+- a mais **velha** (menor prioridade) **espera** (até `ESPERA_CONFLITO_MS`);
+- a mais **nova** **morre** (voto NÃO `CONFLITO_PRECEDENCIA`) — esquema *wait-die*, que **impede deadlock distribuído**,
+  pois só se espera por transações mais novas, e a relação "mais velha que" é uma ordem total sem ciclos;
+- se a capacidade ainda não acabou mas há uma transação mais velha esperando pelo mesmo trecho, as mais novas não furam a fila.
+Assim o critério é bem definido, justificado e igual em todas as empresas.
+
+### 4.4 Falhas e recuperação (nenhum bloqueio indefinido)
+- **Participante cai com PREPARED gravado**: ao voltar, mantém o assento bloqueado e resolve a dúvida perguntando ao
+  coordenador; se este não responde, usa a **terminação cooperativa** (`/terminacao`) com os outros participantes.
+- **Coordenador cai antes da decisão**: na volta, `PREPARANDO` vira ABORT; participantes em dúvida consultam e abortam.
+- **Coordenador cai depois da decisão**: na volta, retransmite a decisão aos participantes sem `ack`.
+- **Bloqueio órfão** (queda entre bloquear e gravar PREPARED — o SIM nunca foi enviado): liberado na recuperação.
+- **Lease do voto SIM** (`leaseMs`, padrão 30 s): se coordenador e demais participantes ficarem inacessíveis, o participante
+  **aborta sozinho** ao fim do lease, liberando o assento (nenhum bloqueio é indefinido). Para que isso seja seguro, o
+  coordenador só decide COMMIT se a votação terminou em **menos da metade do lease**; no caso extremo de um COMMIT recusado
+  (`409`) por quem já abortou, o coordenador **compensa** (`/cancelar`) todos os outros e informa falha ao passageiro.
+- **Demais empresas seguem operando**: o par fora do ar é marcado suspeito; buscas o ignoram e itinerários que não
+  dependem dele são confirmados normalmente. Itinerários que dependem dele recebem `EMPRESA_INDISPONIVEL`.
+
+## 5. Máquina de estados do participante
+
+```
+(nada) --prepare ok--> PREPARANDO --grava PREPARED--> PREPARED --commit--> COMMITTED
+                          |  voto NAO / abort                     |--abort/timeout--> ABORTED
+                          +-----------------------------> ABORTED (tombstone: PREPARE tardio recebe NAO)
+COMMITTED --cancelar (compensação)--> ABORTED
+```
+
+## 6. Protocolo dos clientes (TCP + JSON), resumo
+
+Inalterado em relação ao Problema 1 para cadastro, login e cadastro de caronas. O que o consórcio acrescenta:
+
+| Ação | Requisição | Resposta |
+|---|---|---|
+| `buscar_carona` | `{"classe":"Cliente","acao":"buscar_carona","origem","destino","data"}` | array de trechos diretos de **todas** as empresas, cada um com `id`, `empresaId`, `nomeMotorista`, `origem`, `destino`, `data`, `hora`, `capacidade`, `preco` |
+| `buscar_trechos_partida` | `{"acao":"buscar_trechos_partida","origem"}` | idem, para montar o itinerário trecho a trecho |
+| `buscar_rotas` | `{"acao":"buscar_rotas","origem","destino","data"?}` | `[{"trechos":[{id,empresaId,origem,destino,nomeMotorista,data,hora,preco},...]},...]` — itinerários (até 6 trechos, 200 rotas) que misturam empresas |
+| `confirmar_itinerario` | `{"acao":"confirmar_itinerario","emailCliente","nomeCliente","origemRota","destinoRota","rota":[{"idTrecho","origem","destino"},...]}` | `{"status":"ITINERARIO_CONFIRMADO","idItinerario":N,"idTransacao":"E1-..."}` ou texto: `ITINERARIO_INVALIDO`, `TRECHO_NAO_ENCONTRADO`, `ASSENTO_INDISPONIVEL`, `RESERVA_DUPLICADA`, `EMPRESA_INDISPONIVEL`, `FALHA_ITINERARIO` |
+
+
+## Estrutura do repositório
+
+```
+cJSON/                 cJSON.c cJSON.h
+GrafoMapa/             grafomapa.c grafomapa.h mapa.txt          (mapa + busca de itinerários)
+DockerFile/            DockerFile.Servidor  DockerFile.Cliente  DockerFile.Motorista
+src/                   cliente.c motorista.c formatos.h          (clientes do Problema 1)
+src/Consórcio/         servidor.c servidor.h consorcio.c consorcio.h lamport.c lamport.h
+docker-compose.yml     3 empresas na mesma máquina          docker-compose.empresa.yml  1 empresa por computador
+docs/API.md            especificação da API REST + diagramas de sequência
+simulador/             vaijunto.py (biblioteca), simulador.py (gerador de carga)
+testes/                teste_consorcio.py (carga + injeção de falhas + auditoria)
+relatorio/             relatorio.tex, refs.bib, sbc-template.sty, sbc.bst, relatorio.pdf
+```
+
+O **contexto de build do Docker é a raiz do repositório** (os `COPY` usam `cJSON/`, `GrafoMapa/` e `src/`). Dentro da imagem a pasta
+`Consórcio` vira `consorcio` (sem acento) para evitar problemas de codificação de nomes de arquivo.
+
+## Atalhos com o Makefile (na raiz do repositório)
+```bash
+make deps                  # instala gcc, libmicrohttpd, python3, curl (e GTK3 para a interface)
+make                       # compila bin/servidor, bin/cliente, bin/motorista
+make cluster-up            # 3 empresas locais em segundo plano (clientes :17001-17003, REST :18001-18003)
+make cluster-kill EMPRESA=2   # derruba a empresa 2 (kill -9)      make cluster-start EMPRESA=2   # religa (recupera do disco)
+make cluster-status | cluster-logs | cluster-down
+make simulador DURACAO=30 THREADS=24   # carga + auditoria no cluster local
+make teste                 # teste automatizado completo (modo local)
+make docker-up | docker-kill EMPRESA=2 | docker-start EMPRESA=2 | docker-down | teste-docker
+make relatorio             # compila o relatório SBC
+```
+Os clientes (`make run-cliente`) usam a porta fixa 65432: para usá-los com o cluster local, use `make run-servidor`
+(empresa na porta padrão) ou o Docker (`docker compose run --rm cliente`, host `empresa1`).
+
+## Executando
+
+### A. Três empresas na mesma máquina (desenvolvimento)
+```bash
+docker compose up -d --build            # (na raiz do repositório) empresa1:65431/8081  empresa2:65432/8082  empresa3:65433/8083
+docker compose run --rm motorista       # IP do servidor: empresa1  -> cadastre-se e publique caronas
+docker compose run --rm cliente         # IP do servidor: empresa1  -> busque e confirme itinerários
+docker compose kill empresa2            # derruba uma empresa; as outras continuam
+docker compose start empresa2           # ela volta e se recupera sozinha
+```
+
+### B. Apresentação: uma empresa por computador do laboratório
+Em cada máquina (ajuste os IPs; libere `65432/tcp` e `8080/tcp` no firewall):
+```bash
+EMPRESA_ID=1 PEERS="2=http://IP2:8080,3=http://IP3:8080" docker compose -f docker-compose.empresa.yml up -d --build
+EMPRESA_ID=2 PEERS="1=http://IP1:8080,3=http://IP3:8080" docker compose -f docker-compose.empresa.yml up -d --build
+EMPRESA_ID=3 PEERS="1=http://IP1:8080,2=http://IP2:8080" docker compose -f docker-compose.empresa.yml up -d --build
+```
+O tutor pode interromper qualquer uma (`docker kill empresaN`); religue com `docker start empresaN` (o volume preserva o disco).
+
+### C. Sem Docker (compilação local, a partir da raiz do repositório)
+```bash
+sudo apt-get install -y libmicrohttpd-dev
+gcc -O2 -Wall -I cJSON -I GrafoMapa -I src -I "src/Consórcio" -o servidor_bin \
+    "src/Consórcio/servidor.c" "src/Consórcio/consorcio.c" "src/Consórcio/lamport.c" GrafoMapa/grafomapa.c cJSON/cJSON.c \
+    -lmicrohttpd -pthread
+gcc -Wall -I cJSON -I src -o cliente_bin   src/cliente.c   cJSON/cJSON.c
+gcc -Wall -I cJSON -I src -o motorista_bin src/motorista.c cJSON/cJSON.c
+# o servidor lê "mapa.txt" do diretório corrente:
+mkdir -p /tmp/empresa1 && cp GrafoMapa/mapa.txt /tmp/empresa1 && cd /tmp/empresa1
+EMPRESA_ID=1 PORTA_CLIENTES=17001 PORTA_REST=18001 PEERS="2=http://127.0.0.1:18002,3=http://127.0.0.1:18003" /caminho/para/servidor_bin
+```
+
+### Variáveis de ambiente do servidor
+| Variável | Padrão | Significado |
+|---|---|---|
+| `EMPRESA_ID` | 1 | id da empresa (≥ 1, único no consórcio) |
+| `PEERS` | vazio | `id=http://host:porta,...` das **outras** empresas |
+| `PORTA_CLIENTES` / `PORTA_REST` | 65432 / 8080 | portas TCP dos clientes e HTTP entre empresas |
+| `PREPARE_TIMEOUT_MS` / `DECISAO_TIMEOUT_MS` / `BUSCA_TIMEOUT_MS` | 5000 / 2000 / 1500 | timeouts de rede (detector de falhas) |
+| `SUSPEITA_MS` | 3000 | tempo em que um par que falhou é tratado como fora do ar |
+| `ESPERA_CONFLITO_MS` | 1500 | quanto uma transação mais velha espera por um assento disputado (wait-die) |
+| `INDOUBT_MS` / `PREPARED_TIMEOUT_MS` | 3000 / 30000 | quando o participante começa a perguntar o resultado / lease do voto SIM |
+| `MODO_TESTE` | 0 | 1 = expõe campos de auditoria na API (só para o teste automatizado) |
+| `CRASH_AT` | — | falha injetada: `part_apos_prepare`, `part_antes_commit`, `coord_antes_decisao`, `coord_apos_decisao` |
+
+## Simulador de passageiros
 ```bash
 python3 simulador/simulador.py \
   --empresas 1=localhost:65431:8081,2=localhost:65432:8082,3=localhost:65433:8083 \
   --semear --threads 32 --duracao 30 --passageiros-por-empresa 40 --auditar
 ```
+Em computadores diferentes: `--empresas 1=IP1:65432:8080,2=IP2:65432:8080,3=IP3:65432:8080`.
+`--auditar` exige servidores com `MODO_TESTE=1`. Só usa a biblioteca padrão do Python 3.
 
-Formato do parâmetro `--empresas`: `id=host:portaClientes:portaRest`, separado por vírgulas. Em computadores diferentes:
-
+## Teste automatizado (carga + injeção de falhas)
 ```bash
-python3 simulador/simulador.py \
-  --empresas 1=IP1:65432:8080,2=IP2:65432:8080,3=IP3:65432:8080 \
-  --threads 32 --duracao 30 --auditar
+# sem Docker (3 processos, cada um com disco próprio) — precisa do binário compilado (opção C)
+python3 testes/teste_consorcio.py --modo local --binario ./servidor_bin
+# com Docker (usa o docker-compose.yml; derruba com `docker kill`)
+python3 testes/teste_consorcio.py --modo docker
+# subconjuntos
+python3 testes/teste_consorcio.py --cenarios carga,queda --duracao 20
 ```
-
-`--auditar` exige que os servidores estejam com `MODO_TESTE=1`. A opção `--saida arquivo.json` grava os resultados do simulador em JSON.
-
-Opções principais:
-
-| Opção | Padrão | Descrição |
-|---|---:|---|
-| `--empresas` | obrigatório | Servidores no formato `id=host:portaClientes:portaRest`. |
-| `--semear` | desativado | Cadastra motoristas e trechos do cenário antes da carga. |
-| `--passageiros-por-empresa` | `40` | Passageiros virtuais cadastrados por empresa. |
-| `--threads` | `24` | Número de passageiros virtuais concorrentes. |
-| `--duracao` | `30` s | Duração da carga. |
-| `--pausa` | `0` s | Pausa entre ciclos de cada passageiro virtual. |
-| `--semente` | aleatória | Semente para reproduzir um cenário. |
-| `--auditar` | desativado | Audita invariantes ao final. |
-| `--saida` | — | Caminho de saída JSON. |
-
-## 12. Testes automatizados
-
-O arquivo `testes/teste_consorcio.py` inicia três servidores independentes no modo local ou utiliza o Docker Compose no modo Docker. No modo local, cada empresa tem um diretório de dados próprio em `/tmp/vaijunto_teste/e1`, `e2` e `e3`. Os diretórios são recriados no início de cada cenário.
-
-### 12.1 Pré-requisitos
-
-- GCC e Make;
-- `libmicrohttpd-dev`;
-- Python 3.8 ou superior;
-- Docker Engine e Docker Compose somente para o modo Docker.
-
-Compile o projeto antes dos testes locais:
-
-```bash
-make dependencias
-make
-```
-
-### 12.2 Invariantes verificadas
-
-| Código | Invariante | Verificação |
-|---|---|---|
-| I1 | Nenhum assento vendido a dois passageiros; capacidade conservada. | `reservas == clientes == passageiros`, sem duplicidade e `livres + reservados + bloqueados == capacidadeTotal`. |
-| I2 | Nenhum itinerário confirmado pela metade. | Cada transação com reserva tem decisão COMMIT no coordenador e reserva em todos os trechos da rota. Itinerários confirmados ao cliente também são cruzados com os trechos. |
-| I3 | Nenhum bloqueio permanece após convergência/recuperação. | Auditoria espera a fila de bloqueios esvaziar e denuncia bloqueios residuais. |
-| D | Falha de uma empresa não derruba operações independentes. | Durante a queda de E2, sondas E1+E3 devem continuar confirmando itinerários que não dependem de E2. |
-
-### 12.3 Cenários disponíveis
-
-| Cenário | Descrição |
-|---|---|
-| `carga` | Gera reservas simultâneas a partir das três empresas e audita I1/I2/I3. |
-| `queda` | Derruba E2 com `kill -9` ou `docker kill` durante carga, testa operações E1+E3 e reinicia E2 com o mesmo armazenamento. |
-| `pontos` | Injeta falhas em `part_apos_prepare`, `part_antes_commit`, `coord_antes_decisao` e `coord_apos_decisao`. |
-| `cancelamento-cliente` | Confirma itinerário E1+E2, consulta as reservas pelo cliente, verifica os trechos de ambas as empresas e cancela pelo ID remoto. |
-| `cancelamento` | Abre janela após PREPARE e cancela, pelo motorista de E2, o trecho remoto antes da decisão do coordenador E1. |
-| `controle` | Controle negativo: altera intencionalmente um arquivo de reserva para simular COMMIT parcial e exige que a auditoria detecte I2. |
-
-### 12.4 Executar os testes
-
-Suíte local completa:
-
-```bash
-make teste
-```
-
-Comando equivalente, especificando o binário e o relatório JSON:
-
-```bash
-python3 testes/teste_consorcio.py \
-  --modo local --binario ./bin/servidor \
-  --relatorio-json resultados/teste_local.json
-```
-
-Subconjunto rápido para carga e os dois fluxos de cancelamento:
-
-```bash
-python3 testes/teste_consorcio.py \
-  --modo local --binario ./bin/servidor \
-  --cenarios carga,cancelamento-cliente,cancelamento \
-  --duracao 10 --threads 16 \
-  --relatorio-json resultados/validacao_local.json
-```
-
-Modo Docker:
-
-```bash
-make teste-docker
-```
-
-O backend Docker executa `docker compose down -v` para iniciar/finalizar o ambiente de teste limpo. **Isso remove os volumes de teste**; não utilize esse modo com os dados reais da apresentação.
-
-### 12.5 Evidências e resultados
-
-Os testes imprimem métricas de carga, latência, confirmações e violações. Quando `--relatorio-json` é informado, gravam um resumo agregado em JSON. Guarde também os logs dos três servidores e a saída completa da auditoria.
-
-| Execução | Modo | Cenários | Threads/duração | Resultado observado | JSON |
-|---|---|---|---|---|---|
-| Laboratório | local | carga, queda, pontos, cancelamento-cliente, cancelamento, controle | preencher após executar | preencher após executar | `resultados/teste_local.json` |
-| Laboratório | Docker | cenários compatíveis | preencher após executar | preencher após executar | `resultados/teste_docker.json` |
-
-**Não registre resultados esperados como resultados medidos.** A detecção da corrupção intencional no cenário `controle` significa que a auditoria passou nesse teste negativo.
-
-## 13. Emulação Docker
-
-Há duas configurações:
-
-- `docker-compose.yml`: três empresas na mesma máquina; adequada para desenvolvimento e testes.
-- `docker-compose.empresa.yml`: uma empresa por computador; configuração a ser usada na apresentação do laboratório.
-
-### 13.1 Três empresas na mesma máquina
-
-Na raiz do projeto:
-
-```bash
-docker compose up -d --build
-```
-
-Portas publicadas no host:
-
-| Empresa | TCP clientes | REST |
-|---|---:|---:|
-| E1 | `65431` | `8081` |
-| E2 | `65432` | `8082` |
-| E3 | `65433` | `8083` |
-
-Os clientes interativos são executados assim:
-
-```bash
-docker compose run --rm motorista
-docker compose run --rm cliente
-```
-
-Os serviços `cliente` e `motorista` usam a empresa 1 como servidor de destino na configuração de desenvolvimento. Para derrubar e recuperar uma empresa:
-
-```bash
-docker compose kill empresa2
-docker compose start empresa2
-```
-
-Ver logs:
-
-```bash
-docker compose logs -f empresa2
-```
-
-Para habilitar os campos de auditoria no cluster:
-
-```bash
-MODO_TESTE=1 docker compose up -d --build
-```
-
-### 13.2 Uma empresa por computador do laboratório
-
-O enunciado exige contêiner isolado em computadores distintos. Em cada máquina, instale Docker Engine e Docker Compose e libere no firewall:
-
-- `8080/tcp`: API REST entre os servidores das empresas;
-- `65432/tcp`: conexão TCP dos clientes à empresa correspondente.
-
-Substitua `IP1`, `IP2` e `IP3` pelos endereços reais alcançáveis das três máquinas. Não use `localhost` ou `127.0.0.1` nos endereços dos peers.
-
-Na máquina E1:
-
-```bash
-EMPRESA_ID=1 \
-PEERS="2=http://IP2:8080,3=http://IP3:8080" \
-docker compose -f docker-compose.empresa.yml up -d --build
-```
-
-Na máquina E2:
-
-```bash
-EMPRESA_ID=2 \
-PEERS="1=http://IP1:8080,3=http://IP3:8080" \
-docker compose -f docker-compose.empresa.yml up -d --build
-```
-
-Na máquina E3:
-
-```bash
-EMPRESA_ID=3 \
-PEERS="1=http://IP1:8080,2=http://IP2:8080" \
-docker compose -f docker-compose.empresa.yml up -d --build
-```
-
-Cada computador cria seu próprio volume persistente `dados`. O contêiner escuta em `65432/tcp` para clientes e `8080/tcp` para os peers.
-
-### 13.3 Verificar conectividade
-
-Em cada máquina, consulte a saúde local:
-
-```bash
-curl -i http://127.0.0.1:8080/api/v1/health
-```
-
-A resposta deve ter HTTP `200`, `status: ok` e o `empresaId` correto. De outra máquina, consulte o IP do peer:
-
-```bash
-curl -i http://IP2:8080/api/v1/health
-```
-
-Confirme que todos os peers respondem antes da demonstração. Verifique os logs com:
-
-```bash
-docker logs --tail 100 empresa1
-```
-
-Use o nome do contêiner correspondente à empresa em cada computador.
-
-### 13.4 Demonstrar falha e recuperação
-
-Com as três empresas ativas e um itinerário que utilize E1+E2:
-
-1. Faça uma busca e uma confirmação que dependam de E2 e registre o comportamento.
-2. Enquanto E2 estiver parada, mostre que operações dependentes somente de E1 e E3 continuam possíveis.
-3. Na máquina E2, provoque a queda abrupta:
-
-   ```bash
-   docker kill empresa2
-   ```
-
-4. Observe os timeouts e os logs das outras empresas.
-5. Recupere E2 sem remover o volume:
-
-   ```bash
-   docker start empresa2
-   ```
-
-6. Aguarde a recuperação do log de transações e a retransmissão de decisões pendentes. Confirme a saúde e execute a auditoria para verificar ausência de bloqueios residuais e itinerários parciais.
-
-**Não use `docker compose down -v` durante a demonstração.** A opção `-v` apaga o volume e destrói o estado persistente que deve ser recuperado.
-
-A execução de três instâncias na mesma máquina comprova o funcionamento em contêineres separados, mas não substitui a demonstração em computadores distintos exigida para o item de Emulação.
-
-## 14. Segurança e limitações conhecidas
-
-A API REST atual não implementa autenticação mútua entre servidores nem TLS. Sua execução deve ficar restrita a uma rede de laboratório isolada, com regras de firewall limitando a origem das conexões. Não exponha as portas REST diretamente à Internet.
-
-O 2PC pode manter uma transação em dúvida enquanto a decisão do coordenador está inacessível; esse comportamento deve ser explicado na apresentação. Durante a indisponibilidade de um peer, a busca pode retornar itinerários parciais e confirmações que dependem daquele peer podem falhar ou aguardar recuperação.
-
-## 15. Relatório acadêmico
-
-O repositório mantém o relatório formal no padrão SBC em `relatorio/relatorio.tex`, com referências em `relatorio/refs.bib`, estilo em `relatorio/sbc-template.sty` e PDF em `relatorio/relatorio.pdf`.
-
-Para recompilar:
-
-```bash
-make relatorio
-```
-
-O relatório acadêmico é um entregável exigido pelo trabalho e permanece separado deste README. Preencha os dados de identificação e atualize a tabela de resultados com medições reais obtidas no ambiente de execução.
-
-## 16. Histórico resumido das alterações do Problema 2
-
-- `DockerFile/DockerFile.Servidor`: build do servidor com `servidor.c`, `consorcio.c`, `lamport.c`, grafo e cJSON; inclusão da dependência REST; exposição das portas e persistência do estado em volume.
-- `GrafoMapa/grafomapa.c` e `.h`: busca de itinerários com trechos de múltiplas empresas, identificadores globais e metadados de empresa/data/hora/preço.
-- `src/Consorcio/servidor.c`: persistência dos trechos, API REST, listagem de reservas e cancelamentos distribuídos.
-- `src/Consorcio/consorcio.c` e `.h`: coordenação 2PC, bloqueios, decisões, compensação, idempotência, recuperação e comunicação REST.
-- `src/Consorcio/lamport.c` e `.h`: relógio lógico e prioridade distribuída.
-- `src/cliente.c`: tratamento de respostas do consórcio, buffers dinâmicos e mensagens de indisponibilidade.
-- `src/motorista.c`: interação do motorista com o cancelamento de caronas.
-- `simulador/`: carga concorrente de passageiros virtuais.
-- `testes/`: testes de carga, concorrência, falhas, cancelamento e auditoria.
-- `docker-compose.yml` e `docker-compose.empresa.yml`: emulação local e em computadores distintos.
+Verifica, lendo o estado de todas as empresas pela API REST:
+
+- **I1** nenhum assento confirmado para dois passageiros (reservas ≤ assentos, sem passageiro repetido, `livres + reservados + bloqueados = total`);
+- **I2** nenhum itinerário pela metade (toda transação com reserva foi decidida COMMIT e está reservada em **todos** os seus trechos; todo itinerário confirmado ao passageiro idem);
+- **I3** nenhum assento bloqueado depois da queda e da recuperação;
+- **D** com a empresa 2 fora do ar, itinerários E1+E3 continuam sendo confirmados.
+
+Cenários: carga pura · `kill -9` da empresa 2 no meio da carga · falha injetada em 4 pontos críticos do 2PC · **controle
+negativo** (corrompe um itinerário de propósito e exige que a auditoria o detecte). Código de saída 0 = tudo OK.
+
+## Mudanças em relação aos arquivos originais
+- `DockerFile/DockerFile.Servidor`: compilava só `servidor.c cJSON.c grafomapa.c` (o link falhava) e não instalava `libmicrohttpd`;
+  agora compila `servidor.c consorcio.c lamport.c grafomapa.c cJSON.c` com `-I` para as pastas, instala as dependências, expõe a
+  porta REST, guarda o estado em volume e traz healthcheck. `DockerFile.Cliente` e `DockerFile.Motorista` foram adaptados às pastas.
+- `GrafoMapa/grafomapa.c/.h`: `buscar_rotas` só lia os trechos **locais**; agora usa `listarTrechosConsorcio()` e devolve itinerários
+  que misturam empresas, com `id` global, `empresaId`, `data`, `hora` e `preco` (limite de 6 trechos / 200 rotas). Passou a incluir
+  `consorcio.h` (por isso a compilação precisa de `-I "src/Consórcio"`).
+- `src/Consórcio/servidor.c`: `fsync` na gravação dos trechos (durabilidade).
+- `src/cliente.c`: leitura das respostas com buffer dinâmico (`realloc`), mensagem para `EMPRESA_INDISPONIVEL` e correção do login
+  (resposta truncada com nomes longos).
+- Novos: `docker-compose.yml`, `docker-compose.empresa.yml`, `docs/API.md`, `simulador/`, `testes/`, `relatorio/`.
