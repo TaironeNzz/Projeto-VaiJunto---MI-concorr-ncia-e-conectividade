@@ -86,7 +86,6 @@ PBL2/
 ├── GrafoMapa/                  # Mapa e busca de itinerários
 ├── simulador/                  # Gerador de carga sem interface gráfica
 ├── testes/                     # Testes automatizados e concorrência
-├── relatorio/                  # Fonte e PDF do relatório no padrão SBC
 ├── dados/                      # Dados locais de execução
 ├── trechosCadastrados/         # Trechos da empresa
 ├── transacoes/                 # Logs de transações
@@ -1005,19 +1004,7 @@ A API REST atual não implementa autenticação mútua entre servidores nem TLS.
 
 O 2PC pode manter uma transação em dúvida enquanto a decisão do coordenador está inacessível; esse comportamento deve ser explicado na apresentação. Durante a indisponibilidade de um peer, a busca pode retornar itinerários parciais e confirmações que dependem daquele peer podem falhar ou aguardar recuperação.
 
-## 15. Relatório acadêmico
-
-O repositório mantém o relatório formal no padrão SBC em `relatorio/relatorio.tex`, com referências em `relatorio/refs.bib`, estilo em `relatorio/sbc-template.sty` e PDF em `relatorio/relatorio.pdf`.
-
-Para recompilar:
-
-```bash
-make relatorio
-```
-
-O relatório acadêmico é um entregável exigido pelo trabalho e permanece separado deste README. Preencha os dados de identificação e atualize a tabela de resultados com medições reais obtidas no ambiente de execução.
-
-## 16. Histórico resumido das alterações do Problema 2
+## 15. Histórico resumido das alterações do Problema 2
 
 - `DockerFile/DockerFile.Servidor`: build do servidor com `servidor.c`, `consorcio.c`, `lamport.c`, grafo e cJSON; inclusão da dependência REST; exposição das portas e persistência do estado em volume.
 - `GrafoMapa/grafomapa.c` e `.h`: busca de itinerários com trechos de múltiplas empresas, identificadores globais e metadados de empresa/data/hora/preço.
