@@ -13,6 +13,7 @@
 #include <arpa/inet.h>
 #include <time.h>
 #include <stdarg.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include <dirent.h>
 #include <signal.h>
@@ -124,28 +125,54 @@ void log_mensagem(LogLevel level, const char *format, ...) {
 #define ARQ_CONTADOR "ArquivoID/contadorTrechos.txt"
 
 //função que carrega o próximo idTrecho e o contador de trechos dos arquivos (chamada na inicialização)
-void encontrarID(){
-    FILE *arquivo = fopen(ARQ_ID, "r");
-    if (arquivo == NULL) {
-        perror("Erro ao abrir o arquivo de ID");
-    } else {
-        if (fscanf(arquivo, "%d", &idTrecho) != 1) {
-            fprintf(stderr, "Erro ao ler o ID do arquivo\n");
-            idTrecho = 0;
-        }
-        fclose(arquivo);
+void encontrarID() {
+
+    // Criar diretório caso não exista
+    if (mkdir("ArquivoID", 0755) == -1 && errno != EEXIST) {
+        perror("Erro ao criar diretório ArquivoID");
+        exit(EXIT_FAILURE);
     }
 
-    FILE *arquivo2 = fopen(ARQ_CONTADOR, "r");
-    if (arquivo2 == NULL) {
-        perror("Erro ao abrir o arquivo de contador de trechos");
-    } else {
-        if (fscanf(arquivo2, "%d", &contadorTrechos) != 1) {
-            fprintf(stderr, "Erro ao ler o contador de trechos do arquivo\n");
-            contadorTrechos = 0;
-        }
-        fclose(arquivo2);
+    // Abrir ou criar arquivo de ID
+    FILE *arquivo = fopen(ARQ_ID, "a+");
+
+    if (arquivo == NULL) {
+        perror("Erro ao abrir/criar arquivo de ID");
+        exit(EXIT_FAILURE);
     }
+
+    rewind(arquivo);
+
+    if (fscanf(arquivo, "%d", &idTrecho) != 1) {
+        idTrecho = 0;
+        rewind(arquivo);
+        fprintf(arquivo, "%d\n", idTrecho);
+        fflush(arquivo);
+    }
+
+    fclose(arquivo);
+
+    // Abrir ou criar contador
+    FILE *arquivo2 = fopen(ARQ_CONTADOR, "a+");
+
+    if (arquivo2 == NULL) {
+        perror("Erro ao abrir/criar contador de trechos");
+        exit(EXIT_FAILURE);
+    }
+
+    rewind(arquivo2);
+
+    if (fscanf(arquivo2, "%d", &contadorTrechos) != 1) {
+        contadorTrechos = 0;
+        rewind(arquivo2);
+        fprintf(arquivo2, "%d\n", contadorTrechos);
+        fflush(arquivo2);
+    }
+
+    fclose(arquivo2);
+
+    printf("ID carregado: %d\n", idTrecho);
+    printf("Contador carregado: %d\n", contadorTrechos);
 }
 
 //grava o id e o contador de trechos nos arquivos. Chamar com idMutex travado (exceto na inicialização)
