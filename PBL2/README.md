@@ -1043,7 +1043,7 @@ Use o nome do contêiner correspondente à empresa em cada computador.
 Com as três empresas ativas e um itinerário que utilize E1+E2:
 
 1. Faça uma busca e uma confirmação que dependam de E2 e registre o comportamento.
-2. Enquanto E2 estiver parada, mostre que operações dependentes somente de E1 e E3 continuam possíveis.
+2. Enquanto E2 estiver parada, verifique que apenas as operações de E1 e E3 continuam possíveis.
 3. Na máquina E2, provoque a queda abrupta:
 
    ```bash
