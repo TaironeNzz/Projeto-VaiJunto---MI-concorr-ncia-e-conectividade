@@ -801,7 +801,7 @@ Modo Docker:
 make teste-docker
 ```
 
-O backend Docker executa `docker compose down -v` para iniciar/finalizar o ambiente de teste limpo. **Isso remove os volumes de teste**; não utilize esse modo com os dados reais da apresentação.
+O backend Docker executa `docker compose down -v` para iniciar/finalizar o ambiente de teste limpo. **Isso remove os volumes de teste**.
 
 ### 12.5 Evidências e resultados medidos
 
@@ -1060,10 +1060,6 @@ Com as três empresas ativas e um itinerário que utilize E1+E2:
    ```
 
 6. Aguarde a recuperação do log de transações e a retransmissão de decisões pendentes. Confirme a saúde e execute a auditoria para verificar ausência de bloqueios residuais e itinerários parciais.
-
-**Não use `docker compose down -v` durante a demonstração.** A opção `-v` apaga o volume e destrói o estado persistente que deve ser recuperado.
-
-A execução de três instâncias na mesma máquina comprova o funcionamento em contêineres separados, mas não substitui a demonstração em computadores distintos exigida para o item de Emulação.
 
 ## 14. Histórico resumido das alterações do Problema 2
 
