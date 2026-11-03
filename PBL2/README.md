@@ -932,8 +932,6 @@ resultados/teste_docker.json
 
 Os valores acima foram transcritos das saídas de terminal fornecidas para esta versão do README. Os arquivos JSON não são incluídos como se tivessem sido anexados: eles são gerados no ambiente em que os comandos são executados. Para reproduzir os números, execute novamente os comandos e preserve os novos arquivos JSON e os logs dos servidores.
 
-**Escopo da evidência:** os testes locais e a suíte Docker demonstram três instâncias na mesma máquina. Eles não comprovam, por si só, a execução em três computadores físicos distintos exigida pelo item de Emulação do trabalho. Essa demonstração deve ser realizada no laboratório, conforme a seção 13.2.
-
 ## 13. Emulação Docker
 
 Há duas configurações:
