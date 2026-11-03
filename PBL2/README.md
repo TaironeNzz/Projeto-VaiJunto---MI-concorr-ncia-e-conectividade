@@ -1,6 +1,6 @@
 # VaiJunto — Consórcio de Caronas Compartilhadas
 
-**Problema 2 — TEC502 | Sistemas Distribuídos**
+**Problema 2 — TEC502 | MI - Concorrência e Conectividade**
 
 Este README reúne a documentação operacional e técnica do repositório: arquitetura, instalação, compilação, API REST entre empresas, busca distribuída, exclusão mútua, precedência, prevenção de deadlock, atomicidade, cancelamento, tolerância a falhas, persistência, testes e emulação Docker.
 
