@@ -124,9 +124,76 @@ Os binários são gerados em `bin/`:
 bin/servidor
 bin/cliente
 bin/motorista
+bin/interface   # gerado quando GTK3 está instalado
 ```
 
-A interface gráfica é compilada se GTK3 estiver instalado e o arquivo `src/interface.c` estiver presente.
+O executável `bin/interface` é opcional. O alvo `make` só o inclui quando `pkg-config` encontra a biblioteca `gtk+-3.0` e o arquivo `src/interface.c` existe. Sem GTK3, o servidor, o cliente de terminal e o motorista continuam sendo compilados; o Makefile informa que a interface gráfica foi ignorada.
+
+### 3.3 Compilação e execução da interface gráfica (GTK3)
+
+A interface gráfica é implementada em `src/interface.c` com GTK3. Ela reúne as operações de passageiro e motorista em uma janela com telas de cadastro, login e funcionalidades de cada perfil. A interface não substitui os servidores: ela atua como cliente e se comunica com **uma empresa por conexão**, usando o mesmo protocolo TCP/JSON dos clientes de terminal.
+
+A conexão utiliza a porta TCP `65432`. Na tela inicial, informe o endereço IP do servidor da empresa à qual o usuário pertence. Em uma execução local, use `127.0.0.1`; na emulação distribuída, informe o IP alcançável do computador que hospeda a empresa escolhida. Não informe `http://` nem acrescente `:8080`, pois a interface usa TCP na porta `65432`, e não a API REST dos servidores.
+
+**Instalar GTK3 e as ferramentas de compilação (Debian/Ubuntu):**
+
+```bash
+make dependencias
+```
+
+O alvo instala `libgtk-3-dev` e `pkg-config`, além das demais dependências do projeto. Se preferir instalar somente o necessário para a interface:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y build-essential pkg-config libgtk-3-dev
+```
+
+**Verificar se GTK3 está disponível:**
+
+```bash
+pkg-config --modversion gtk+-3.0
+```
+
+O comando deve imprimir uma versão da série 3. Se aparecer `Package gtk+-3.0 was not found`, instale `libgtk-3-dev` e execute a verificação novamente.
+
+**Compilar:**
+
+```bash
+make clean
+make
+```
+
+O `make` detecta GTK3 por meio de `pkg-config` e, quando a biblioteca está disponível, compila `src/interface.c` com os parâmetros de compilação e ligação retornados por `pkg-config --cflags --libs gtk+-3.0`. Depois, confirme a geração do executável:
+
+```bash
+ls -l bin/interface
+```
+
+**Executar a interface:**
+
+```bash
+make run-interface
+```
+
+Esse alvo executa `./bin/interface`. Também é possível iniciar diretamente:
+
+```bash
+./bin/interface
+```
+
+A janela inicial solicita o IP do servidor. Depois de informar o IP, o usuário escolhe o perfil (passageiro ou motorista), realiza cadastro ou login e utiliza as operações disponíveis para aquele perfil. A interface mantém a comunicação com a empresa selecionada pela conexão TCP; buscas distribuídas e reservas entre empresas são coordenadas pelo servidor dessa empresa por meio da API REST do consórcio.
+
+**Uso com Docker em computadores diferentes:**
+
+Os contêineres hospedam os servidores, não a janela GTK. Portanto, GTK3 deve estar instalado no computador Linux que executará a interface gráfica, e não precisa ser instalado na imagem do servidor. Com os servidores ativos, execute `make run-interface` no computador com ambiente gráfico e informe o IP da empresa desejada. A rede deve permitir a conexão TCP ao IP remoto na porta `65432`. Para acessar outra empresa, encerre a sessão/conexão atual e conecte-se ao IP do servidor dessa outra empresa.
+
+**Problemas comuns:**
+
+- `No rule to make target 'run-interface'` ou alvo sem executável: confirme que está na raiz do projeto e que está usando o Makefile deste repositório.
+- `Package gtk+-3.0 was not found`: instale `libgtk-3-dev` e `pkg-config`.
+- `bin/interface` não foi gerado: execute `pkg-config --modversion gtk+-3.0`, depois `make clean && make` e verifique se `src/interface.c` existe.
+- A janela abre, mas não conecta: confira o IP digitado, se o servidor está ativo e se a porta TCP `65432` está liberada no firewall. A porta REST `8080` não é utilizada pela interface.
+- Erro de display ou janela não abre: execute em uma sessão Linux com ambiente gráfico ativo. Uma sessão SSH sem encaminhamento gráfico ou um contêiner sem servidor gráfico não abre a janela GTK diretamente.
 
 Limpar somente os binários:
 
@@ -140,7 +207,7 @@ Limpar binários e estado local de execução (use com cuidado, pois apaga dados
 make distclean
 ```
 
-### 3.3 Execução de uma empresa isolada, sem Docker
+### 3.4 Execução de uma empresa isolada, sem Docker
 
 Para testar apenas um servidor sem pares:
 
@@ -162,7 +229,7 @@ make run-motorista
 
 O servidor isolado usa, por padrão, as portas TCP `65432` e REST `8080`.
 
-### 3.4 Cluster local de três empresas, sem Docker
+### 3.5 Cluster local de três empresas, sem Docker
 
 O Makefile permite executar três processos independentes, cada um com diretório de dados próprio em `run/empresaN`.
 
@@ -998,13 +1065,7 @@ Com as três empresas ativas e um itinerário que utilize E1+E2:
 
 A execução de três instâncias na mesma máquina comprova o funcionamento em contêineres separados, mas não substitui a demonstração em computadores distintos exigida para o item de Emulação.
 
-## 14. Segurança e limitações conhecidas
-
-A API REST atual não implementa autenticação mútua entre servidores nem TLS. Sua execução deve ficar restrita a uma rede de laboratório isolada, com regras de firewall limitando a origem das conexões. Não exponha as portas REST diretamente à Internet.
-
-O 2PC pode manter uma transação em dúvida enquanto a decisão do coordenador está inacessível; esse comportamento deve ser explicado na apresentação. Durante a indisponibilidade de um peer, a busca pode retornar itinerários parciais e confirmações que dependem daquele peer podem falhar ou aguardar recuperação.
-
-## 15. Histórico resumido das alterações do Problema 2
+## 14. Histórico resumido das alterações do Problema 2
 
 - `DockerFile/DockerFile.Servidor`: build do servidor com `servidor.c`, `consorcio.c`, `lamport.c`, grafo e cJSON; inclusão da dependência REST; exposição das portas e persistência do estado em volume.
 - `GrafoMapa/grafomapa.c` e `.h`: busca de itinerários com trechos de múltiplas empresas, identificadores globais e metadados de empresa/data/hora/preço.
