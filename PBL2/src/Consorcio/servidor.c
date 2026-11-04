@@ -1639,7 +1639,6 @@ void recuperarItinerarios(void) {
 }
 
 //função para verificar se a rota cumpre o caminho da origem até o destino, caso não, as reservas são canceladas
-//(fluxo antigo, não atômico: prefira "confirmar_itinerario")
 void finalizar_Rota(cJSON *jsonLogin, int socketCliente){
     int idSelecionado = cJSON_GetNumberValue(cJSON_GetObjectItem(jsonLogin, "idSelecionado"));
     int trechoEncontrado = 0;

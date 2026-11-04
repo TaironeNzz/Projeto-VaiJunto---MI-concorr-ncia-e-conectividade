@@ -11,7 +11,7 @@
  *   6. recuperação após queda e thread de manutenção (retransmissão de decisões e resolução de dúvidas);
  *   7. API REST (libmicrohttpd).
  *
- * Invariantes de projeto (ver docs/API.md e o relatório):
+ * Invariantes de projeto:
  *   - nenhuma decisão é enviada antes de ser gravada (fsync) no log do coordenador;
  *   - nenhum voto SIM é enviado antes de o participante gravar o bloqueio e o registro PREPARED;
  *   - toda operação é idempotente (mensagens podem ser duplicadas, atrasadas ou reordenadas);
@@ -46,7 +46,7 @@
 #define MAX_TX_TRECHOS    16
 #define MAX_RESP_BYTES    (8 * 1024 * 1024)
 
-/* ---------------------------------------------------------------- 1. configuração e pares */
+/*configuração e pares */
 static int empresaId       = 1;
 static int portaClientes   = 65432;
 static int portaRest       = 8080;
@@ -144,7 +144,7 @@ static void peerOk(Peer *p) {
     pthread_mutex_unlock(&peerMutex);
 }
 
-/* ---------------------------------------------------------------- falhas injetadas (teste) */
+/* falhas injetadas (teste) */
 void pontoDeFalha(const char *nome) {
     static const char *alvo = NULL;
     static int lido = 0;
@@ -223,7 +223,7 @@ static void pseudonimo(const char *email, char *out, size_t tam) {
     snprintf(out, tam, "p%d-%016llx", empresaId, (unsigned long long)h);
 }
 
-/* ---------------------------------------------------------------- 2. cliente HTTP */
+/* cliente HTTP */
 /* Chamada HTTP/1.1 com timeout TOTAL. Retorna 0 se obteve resposta HTTP (status em *status), -1 em falha/timeout.
  * O relógio de Lamport viaja no cabeçalho X-Lamport-Clock (envio: tick; resposta: receive). */
 static int httpChamar(Peer *p, const char *metodo, const char *caminho, const char *corpo,
@@ -329,7 +329,7 @@ static int httpChamar(Peer *p, const char *metodo, const char *caminho, const ch
     return 0;
 }
 
-/* ---------------------------------------------------------------- 3. PARTICIPANTE do 2PC */
+/* PARTICIPANTE do 2PC */
 /*
  * Cada trecho guarda, além de "capacidade" (assentos livres), as listas:
  *   "bloqueios": assentos segurados por transações em PREPARED  [{tx,id,nome,ts,empresa}]
@@ -449,7 +449,7 @@ static int partTombstone(const char *tx) {
     return partGravar(&t);
 }
 
-/* ---- operações sobre o arquivo do trecho (chamar SEM o mutex do trecho; elas travam sozinhas) ---- */
+/* operações sobre o arquivo do trecho (chamar SEM o mutex do trecho; elas travam sozinhas) */
 static cJSON *arrayDe(cJSON *t, const char *k) {
     cJSON *a = cJSON_GetObjectItemCaseSensitive(t, k);
     if (!cJSON_IsArray(a)) {
@@ -1003,7 +1003,7 @@ static const char *partEstadoLeitura(const char *txId) {
     return e < 0 ? "DESCONHECIDA" : nomeEstado[e];
 }
 
-/* ---------------------------------------------------------------- 4. COORDENADOR do 2PC */
+/* COORDENADOR do 2PC */
 /*
  * O coordenador é a empresa à qual o passageiro está conectado, e só para AQUELA transação.
  * Registro durável (transacoes/coord_<tx>.json):
@@ -1488,7 +1488,7 @@ int consorcioConfirmarItinerario(cJSON *req, int *idItinOut, char *txOut, size_t
     return rc;
 }
 
-/* ---------------------------------------------------------------- 5. busca no consórcio */
+/* busca no consórcio */
 static int dataConfere(const char *filtro, const char *dataTrecho) {
     if (!filtro || !*filtro || strcmp(filtro, "dd/mm/aaaa") == 0) return 1;
     return dataTrecho && strcmp(filtro, dataTrecho) == 0;
@@ -1552,7 +1552,7 @@ cJSON *listarTrechosConsorcio(const char *data) {
     return saida;
 }
 
-/* ---------------------------------------------------------------- 6. recuperação e manutenção */
+/* recuperação e manutenção */
 static void recuperarParticipante(void) {
     DIR *dir = opendir(DIR_TX);
     if (!dir) return;
@@ -2094,7 +2094,7 @@ int consorcioIniciar(void) {
     return 1;
 }
 
-/* ---------------------------------------------------------------- 7. API REST entre servidores */
+/* API REST entre servidores */
 /*
  *  GET  /api/v1/health
  *  GET  /api/v1/trechos[?origem=&destino=&data=&disponiveis=true]
