@@ -1,0 +1,17 @@
+{
+  "executado_em": "2026-11-02T18:55:47.346608-03:00",
+  "modo": "docker",
+  "cenarios": [
+    "carga",
+    "queda",
+    "pontos",
+    "cancelamento-cliente",
+    "cancelamento",
+    "controle"
+  ],
+  "duracao_carga_s": 15.0,
+  "threads": 24,
+  "aprovado": true,
+  "violacoes": [],
+  "observacao": "O relatório registra o resultado desta execução; não substitui os logs detalhados do simulador."
+}

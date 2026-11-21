@@ -1,0 +1,13 @@
+# Cliente (motorista). Contexto de build = RAIZ do repositório:
+#   docker build -t app-motorista -f DockerFile/DockerFile.Motorista .
+#   docker run -it --rm app-motorista                     (informe o IP/host do servidor da SUA empresa)
+# Com o docker-compose: docker compose run --rm motorista
+FROM gcc:latest
+
+WORKDIR /app
+COPY cJSON/ ./cJSON/
+COPY src/motorista.c src/formatos.h ./src/
+
+RUN gcc -Wall -I cJSON -I src src/motorista.c cJSON/cJSON.c -o /usr/local/bin/motorista_bin
+
+CMD ["motorista_bin"]

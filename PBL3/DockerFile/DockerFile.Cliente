@@ -1,0 +1,14 @@
+# Cliente (passageiro). Contexto de build = RAIZ do repositório:
+#   docker build -t app-cliente -f DockerFile/DockerFile.Cliente .
+#   docker run -it --rm app-cliente                       (informe o IP/host do servidor da SUA empresa)
+# Com o docker-compose: docker compose run --rm cliente   (host do servidor: empresa1, empresa2 ou empresa3)
+FROM gcc:latest
+
+WORKDIR /app
+COPY cJSON/ ./cJSON/
+COPY src/cliente.c src/formatos.h ./src/
+
+# cliente.c inclui "cJSON.h" e "formatos.h": as pastas entram com -I
+RUN gcc -Wall -I cJSON -I src src/cliente.c cJSON/cJSON.c -o /usr/local/bin/cliente_bin
+
+CMD ["cliente_bin"]
