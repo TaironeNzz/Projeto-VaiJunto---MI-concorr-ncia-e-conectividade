@@ -18,9 +18,9 @@
 # ---------------------------------------------------------------------------------------------
 FROM gcc:latest
 
-# libmicrohttpd: API REST | curl: healthcheck
+# libsodium: criptografia da futura camada Blockchain | libmicrohttpd: API REST | curl: healthcheck
 RUN apt-get update \
- && apt-get install -y --no-install-recommends libmicrohttpd-dev curl \
+ && apt-get install -y --no-install-recommends libsodium-dev libmicrohttpd-dev curl \
  && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

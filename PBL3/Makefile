@@ -11,7 +11,7 @@
 #   testes/         teste_consorcio.py
 #
 # Uso rapido:
-#   make deps          instala as dependencias (gcc, make, libmicrohttpd, GTK3, Python, curl e TeX Live)
+#   make deps          instala as dependencias (gcc, make, libsodium, libmicrohttpd, GTK3, Python, curl e TeX Live)
 #   make               compila servidor, cliente, motorista (e interface, se houver GTK3)
 #
 # Consorcio SEM Docker (3 empresas como processos locais, cada uma com disco proprio em run/empresaN):
@@ -114,15 +114,15 @@ deps:
 	@if command -v apt-get >/dev/null 2>&1; then \
 		echo ">> Debian/Ubuntu"; \
 		sudo apt-get update && \
-		sudo apt-get install -y build-essential pkg-config libmicrohttpd-dev libgtk-3-dev python3 curl texlive-latex-extra texlive-pictures texlive-fonts-recommended; \
+		sudo apt-get install -y build-essential pkg-config libsodium-dev libmicrohttpd-dev libgtk-3-dev python3 curl texlive-latex-extra texlive-pictures texlive-fonts-recommended; \
 	elif command -v dnf >/dev/null 2>&1; then \
 		echo ">> Fedora/RHEL"; \
-		sudo dnf install -y gcc make pkgconf-pkg-config libmicrohttpd-devel gtk3-devel python3 curl texlive-scheme-medium; \
+		sudo dnf install -y gcc make pkgconf-pkg-config libsodium-devel libmicrohttpd-devel gtk3-devel python3 curl texlive-scheme-medium; \
 	elif command -v pacman >/dev/null 2>&1; then \
 		echo ">> Arch"; \
-		sudo pacman -S --needed --noconfirm base-devel pkgconf libmicrohttpd gtk3 python curl texlive-most; \
+		sudo pacman -S --needed --noconfirm base-devel pkgconf libsodium libmicrohttpd gtk3 python curl texlive-most; \
 	else \
-		echo "Gerenciador de pacotes nao suportado. Instale manualmente: gcc, make, pkg-config, libmicrohttpd (dev), GTK3 (dev), python3, curl e TeX Live."; \
+		echo "Gerenciador de pacotes nao suportado. Instale manualmente: gcc, make, pkg-config, libsodium (dev), libmicrohttpd (dev), GTK3 (dev), python3, curl e TeX Live."; \
 		exit 1; \
 	fi
 	@echo ">> Dependencias instaladas. (Docker e opcional: https://docs.docker.com/engine/install/)"

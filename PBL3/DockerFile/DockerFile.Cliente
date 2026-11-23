@@ -4,6 +4,11 @@
 # Com o docker-compose: docker compose run --rm cliente   (host do servidor: empresa1, empresa2 ou empresa3)
 FROM gcc:latest
 
+# libsodium: suporte às carteiras e assinaturas digitais do VAIJUNTO.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends libsodium-dev \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
 COPY cJSON/ ./cJSON/
 COPY src/cliente.c src/formatos.h ./src/
